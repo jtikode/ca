@@ -1,0 +1,236 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  ACCOUNTANT
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TaxRegime {
+  OLD
+  NEW
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  FINALIZED
+}
+
+// One row per SMB customer of this SaaS. Every other business record is
+// scoped to an Organization for tenant isolation.
+model Organization {
+  id                String   @id @default(cuid())
+  name              String
+  legalName         String?
+  pan               String?
+  tan               String?
+  state             String
+  pfRegistrationNo  String?
+  esiRegistrationNo String?
+  // Voluntary registration is possible below the statutory employee-count
+  // threshold, so this is an explicit admin toggle rather than derived from
+  // headcount.
+  pfApplicable      Boolean  @default(true)
+  esiApplicable     Boolean  @default(true)
+  financialYearStartMonth Int @default(4)
+  createdAt         DateTime @default(now())
+
+  users          User[]
+  employees      Employee[]
+  payrollRuns    PayrollRun[]
+  caExportBatches CAExportBatch[]
+
+  @@index([state])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  orgId        String
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(OWNER)
+  createdAt    DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+model Employee {
+  id            String         @id @default(cuid())
+  orgId         String
+  employeeCode  String
+  name          String
+  dob           DateTime?
+  gender        String?
+  doj           DateTime
+  dol           DateTime?
+  pan           String?
+  uan           String?
+  esiNumber     String?
+  bankAccountNo String?
+  bankIfsc      String?
+  // Drives which PTSlab applies during a payroll run.
+  state         String
+  pfApplicable  Boolean        @default(true)
+  esiApplicable Boolean        @default(true)
+  status        EmployeeStatus @default(ACTIVE)
+  createdAt     DateTime       @default(now())
+
+  organization      Organization       @relation(fields: [orgId], references: [id])
+  salaryStructures   SalaryStructure[]
+  taxDeclarations    TaxDeclaration[]
+  payslipLines       PayslipLine[]
+
+  @@unique([orgId, employeeCode])
+  @@index([orgId])
+  @@index([orgId, status])
+}
+
+// Versioned by effectiveFrom so past payroll runs keep referencing the
+// structure that was actually in force at the time, even after a revision.
+model SalaryStructure {
+  id                String   @id @default(cuid())
+  employeeId        String
+  effectiveFrom     DateTime
+  basic             Decimal
+  hra               Decimal
+  conveyance        Decimal  @default(0)
+  medicalAllowance  Decimal  @default(0)
+  specialAllowance  Decimal  @default(0)
+  // Free-form extra components ({ name: string, amount: number }[]) for
+  // org-specific allowances that don't warrant their own column.
+  otherAllowances   Json?
+  createdAt         DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, effectiveFrom])
+}
+
+// Feeds the TDS estimate for a given financial year. One row per employee
+// per FY; revising mid-year overwrites the same row rather than versioning,
+// since the CA reconciles the final figure at year-end regardless.
+model TaxDeclaration {
+  id               String    @id @default(cuid())
+  employeeId       String
+  financialYear    String
+  regime           TaxRegime @default(NEW)
+  section80C       Decimal   @default(0)
+  section80D       Decimal   @default(0)
+  hraRentPaid      Decimal   @default(0)
+  homeLoanInterest Decimal   @default(0)
+  otherIncome      Decimal   @default(0)
+  updatedAt        DateTime  @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, financialYear])
+}
+
+model PayrollRun {
+  id           String            @id @default(cuid())
+  orgId        String
+  month        Int
+  year         Int
+  status       PayrollRunStatus  @default(DRAFT)
+  finalizedAt  DateTime?
+  createdAt    DateTime          @default(now())
+
+  organization    Organization    @relation(fields: [orgId], references: [id])
+  payslipLines    PayslipLine[]
+  caExportBatches CAExportBatch[]
+
+  @@unique([orgId, month, year])
+  @@index([orgId])
+}
+
+// Immutable once the parent run is finalized — corrections happen via a new
+// run, not by editing history.
+model PayslipLine {
+  id             String   @id @default(cuid())
+  payrollRunId   String
+  employeeId     String
+  daysInMonth    Int
+  daysPaid       Decimal
+  // Full earnings breakup at the time of the run ({ basic, hra, ... }).
+  earnings       Json
+  grossEarnings  Decimal
+  pfWages        Decimal
+  pfEmployee     Decimal
+  pfEmployer     Decimal
+  pfEps          Decimal
+  pfEdli         Decimal
+  esiWages       Decimal
+  esiEmployee    Decimal
+  esiEmployer    Decimal
+  ptAmount       Decimal
+  tdsAmount      Decimal
+  netPay         Decimal
+  createdAt      DateTime @default(now())
+
+  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id])
+  employee   Employee   @relation(fields: [employeeId], references: [id])
+
+  @@unique([payrollRunId, employeeId])
+  @@index([payrollRunId])
+}
+
+// Admin-editable, state-specific Professional Tax slabs. PF (12%/12% split
+// into EPF/EPS/EDLI/admin) and ESI (0.75%/3.25% up to the wage ceiling)
+// rates change rarely via government notification and are kept as
+// versioned constants in code instead of a table — see src/lib/statutory.ts.
+model PTSlab {
+  id            String   @id @default(cuid())
+  state         String
+  effectiveFrom DateTime
+  minGross      Decimal
+  maxGross      Decimal?
+  monthlyAmount Decimal
+  createdAt     DateTime @default(now())
+
+  @@index([state, effectiveFrom])
+}
+
+model IncomeTaxSlab {
+  id            String    @id @default(cuid())
+  regime        TaxRegime
+  financialYear String
+  minIncome     Decimal
+  maxIncome     Decimal?
+  rate          Decimal
+
+  @@index([regime, financialYear])
+}
+
+// One row per generated CA handoff bundle for a finalized run.
+model CAExportBatch {
+  id            String   @id @default(cuid())
+  orgId         String
+  payrollRunId  String
+  generatedAt   DateTime @default(now())
+  generatedById String
+  fileUrl       String?
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  payrollRun   PayrollRun   @relation(fields: [payrollRunId], references: [id])
+
+  @@index([orgId])
+  @@index([payrollRunId])
+}
