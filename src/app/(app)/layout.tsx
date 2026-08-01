@@ -8,7 +8,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex flex-1 flex-col">
-      <AppNav orgName={organization.name} userName={session.name} />
+      <AppNav orgName={organization.name} userName={session.name} role={session.role} />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
     </div>
   );

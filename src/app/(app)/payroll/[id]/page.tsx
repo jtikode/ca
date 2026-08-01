@@ -14,7 +14,7 @@ function inr(n: number) {
 
 export default async function PayrollRunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await requireSession();
+  const session = await requireSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const run = await db.payrollRun.findFirst({
     where: { id, orgId: session.orgId },

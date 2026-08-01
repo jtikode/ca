@@ -4,14 +4,24 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { assertSession } from "@/lib/permissions";
 import { employeeSchema, taxDeclarationSchema } from "@/lib/validators";
+import { parseEmployeeImport, type ImportError } from "@/lib/employeeImport";
 
 export interface ActionResult {
   ok: boolean;
   error?: string;
+  pending?: boolean;
+}
+
+export interface BulkUploadResult {
+  ok: boolean;
+  error?: string;
+  createdCount?: number;
+  pendingCount?: number;
+  rowErrors?: ImportError[];
 }
 
 export async function createEmployee(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
-  const session = await assertSession(["OWNER", "ADMIN"]);
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const parsed = employeeSchema.safeParse({
     employeeCode: formData.get("employeeCode"),
@@ -45,6 +55,25 @@ export async function createEmployee(_prevState: ActionResult | null, formData: 
     return { ok: false, error: "That employee code is already in use." };
   }
 
+  if (session.role === "HR_MANAGER") {
+    await db.approvalRequest.create({
+      data: {
+        orgId: session.orgId,
+        type: "CREATE_EMPLOYEE",
+        requestedById: session.userId,
+        payload: {
+          ...parsed.data,
+          doj: parsed.data.doj.toISOString(),
+          dob: parsed.data.dob ? parsed.data.dob.toISOString() : null,
+        },
+      },
+    });
+
+    revalidatePath("/employees");
+    revalidatePath("/approvals");
+    return { ok: true, pending: true };
+  }
+
   const { basic, hra, conveyance, medicalAllowance, specialAllowance, ...employeeData } = parsed.data;
 
   await db.employee.create({
@@ -69,7 +98,7 @@ export async function createEmployee(_prevState: ActionResult | null, formData: 
 }
 
 export async function toggleEmployeeStatus(employeeId: string, active: boolean): Promise<void> {
-  const session = await assertSession(["OWNER", "ADMIN"]);
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   await db.employee.updateMany({
     where: { id: employeeId, orgId: session.orgId },
@@ -84,7 +113,7 @@ export async function updateSalaryStructure(
   _prevState: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await assertSession(["OWNER", "ADMIN"]);
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const employee = await db.employee.findFirst({ where: { id: employeeId, orgId: session.orgId } });
   if (!employee) {
@@ -105,6 +134,21 @@ export async function updateSalaryStructure(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
+  if (session.role === "HR_MANAGER") {
+    await db.approvalRequest.create({
+      data: {
+        orgId: session.orgId,
+        type: "UPDATE_SALARY",
+        requestedById: session.userId,
+        payload: { employeeId, ...parsed.data },
+      },
+    });
+
+    revalidatePath(`/employees/${employeeId}`);
+    revalidatePath("/approvals");
+    return { ok: true, pending: true };
+  }
+
   await db.salaryStructure.create({
     data: { employeeId, effectiveFrom: new Date(), ...parsed.data },
   });
@@ -118,7 +162,7 @@ export async function saveTaxDeclaration(
   _prevState: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await assertSession(["OWNER", "ADMIN"]);
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const employee = await db.employee.findFirst({ where: { id: employeeId, orgId: session.orgId } });
   if (!employee) {
@@ -147,4 +191,64 @@ export async function saveTaxDeclaration(
 
   revalidatePath(`/employees/${employeeId}`);
   return { ok: true };
+}
+
+// All-or-nothing: if any row fails validation or has a duplicate employee
+// code, nothing is created — the caller fixes the sheet and re-uploads.
+export async function bulkUploadEmployees(
+  _prevState: BulkUploadResult | null,
+  formData: FormData,
+): Promise<BulkUploadResult> {
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Choose a file to upload." };
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { valid, errors } = await parseEmployeeImport(buffer, session.orgId);
+
+  if (valid.length === 0 && errors.length === 0) {
+    return { ok: false, error: "The file has no employee rows." };
+  }
+  if (errors.length > 0) {
+    return { ok: false, error: `${errors.length} row(s) had errors — fix and re-upload.`, rowErrors: errors };
+  }
+
+  if (session.role === "HR_MANAGER") {
+    await db.approvalRequest.createMany({
+      data: valid.map((row) => {
+        const { doj, dob, ...rest } = row;
+        return {
+          orgId: session.orgId,
+          type: "CREATE_EMPLOYEE" as const,
+          requestedById: session.userId,
+          payload: { ...rest, doj: doj.toISOString(), dob: dob ? dob.toISOString() : null },
+        };
+      }),
+    });
+
+    revalidatePath("/employees");
+    revalidatePath("/approvals");
+    return { ok: true, pendingCount: valid.length };
+  }
+
+  await db.$transaction(
+    valid.map((row) => {
+      const { basic, hra, conveyance, medicalAllowance, specialAllowance, ...employeeData } = row;
+      return db.employee.create({
+        data: {
+          orgId: session.orgId,
+          ...employeeData,
+          salaryStructures: {
+            create: { effectiveFrom: row.doj, basic, hra, conveyance, medicalAllowance, specialAllowance },
+          },
+        },
+      });
+    }),
+  );
+
+  revalidatePath("/employees");
+  return { ok: true, createdCount: valid.length };
 }

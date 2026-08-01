@@ -40,7 +40,7 @@ export async function signup(_prevState: ActionResult | null, formData: FormData
         email: parsed.data.email,
         passwordHash: await hashPassword(parsed.data.password),
         name: parsed.data.name,
-        role: "OWNER",
+        role: "SUPERADMIN",
       },
     });
 
@@ -77,9 +77,10 @@ export async function login(_prevState: ActionResult | null, formData: FormData)
   session.orgId = user.orgId;
   session.role = user.role;
   session.name = user.name;
+  session.employeeId = user.employeeId ?? undefined;
   await session.save();
 
-  redirect("/dashboard");
+  redirect(user.role === "EMPLOYEE" ? "/my-payslips" : "/dashboard");
 }
 
 export async function logout(): Promise<void> {

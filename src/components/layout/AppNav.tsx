@@ -4,16 +4,37 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/actions/authActions";
 import { clsx } from "@/lib/clsx";
+import type { UserRole } from "@/generated/prisma/client";
 
-const LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/employees", label: "Employees" },
-  { href: "/payroll", label: "Payroll" },
-  { href: "/settings", label: "Settings" },
-];
+const LINKS: Record<UserRole, { href: string; label: string }[]> = {
+  SUPERADMIN: [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/employees", label: "Employees" },
+    { href: "/payroll", label: "Payroll" },
+    { href: "/approvals", label: "Approvals" },
+    { href: "/team", label: "Team" },
+    { href: "/settings", label: "Settings" },
+  ],
+  HR_MANAGER: [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/employees", label: "Employees" },
+    { href: "/payroll", label: "Payroll" },
+    { href: "/settings", label: "Settings" },
+  ],
+  EMPLOYEE: [{ href: "/my-payslips", label: "My Payslips" }],
+};
 
-export function AppNav({ orgName, userName }: { orgName: string; userName: string }) {
+export function AppNav({
+  orgName,
+  userName,
+  role,
+}: {
+  orgName: string;
+  userName: string;
+  role: UserRole;
+}) {
   const pathname = usePathname();
+  const links = LINKS[role];
 
   return (
     <header className="border-b border-slate-200 bg-white">
@@ -21,7 +42,7 @@ export function AppNav({ orgName, userName }: { orgName: string; userName: strin
         <div className="flex items-center gap-6">
           <span className="font-bold text-slate-900">{orgName}</span>
           <nav className="flex items-center gap-4">
-            {LINKS.map((link) => (
+            {links.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}

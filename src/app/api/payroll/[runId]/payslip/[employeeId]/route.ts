@@ -11,6 +11,11 @@ export async function GET(
   const { runId, employeeId } = await params;
   const session = await requireSession();
 
+  // EMPLOYEE logins may only ever fetch their own payslip.
+  if (session.role === "EMPLOYEE" && session.employeeId !== employeeId) {
+    notFound();
+  }
+
   const [org, line] = await Promise.all([
     db.organization.findUniqueOrThrow({ where: { id: session.orgId } }),
     db.payslipLine.findFirst({

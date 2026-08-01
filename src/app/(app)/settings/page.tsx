@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { OrganizationForm } from "@/components/settings/OrganizationForm";
 
 export default async function SettingsPage() {
-  const session = await requireSession();
+  const session = await requireSession(["SUPERADMIN", "HR_MANAGER"]);
   const org = await db.organization.findUniqueOrThrow({ where: { id: session.orgId } });
   const ptSlabs = await db.pTSlab.findMany({ orderBy: [{ state: "asc" }, { minGross: "asc" }] });
 

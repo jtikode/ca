@@ -10,7 +10,7 @@ export interface ActionResult {
 }
 
 export async function updateOrganization(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
-  const session = await assertSession(["OWNER", "ADMIN"]);
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const legalName = (formData.get("legalName") as string) || null;
   const pan = (formData.get("pan") as string) || null;

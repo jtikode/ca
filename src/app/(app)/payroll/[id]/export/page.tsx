@@ -7,7 +7,7 @@ import { MONTH_NAMES } from "@/lib/dates";
 
 export default async function ExportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await requireSession();
+  const session = await requireSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const run = await db.payrollRun.findFirst({ where: { id, orgId: session.orgId } });
   if (!run) notFound();

@@ -13,7 +13,7 @@ export interface ActionResult {
 }
 
 export async function createPayrollRun(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
-  const session = await assertSession(["OWNER", "ADMIN"]);
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const parsed = payrollRunInputSchema.safeParse({
     month: formData.get("month"),
@@ -61,7 +61,7 @@ export async function updateDaysPaid(
   _prevState: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await assertSession(["OWNER", "ADMIN"]);
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const run = await db.payrollRun.findFirst({ where: { id: payrollRunId, orgId: session.orgId } });
   if (!run) return { ok: false, error: "Payroll run not found." };
@@ -85,7 +85,7 @@ export async function updateDaysPaid(
 }
 
 export async function finalizePayrollRun(payrollRunId: string): Promise<void> {
-  const session = await assertSession(["OWNER", "ADMIN"]);
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const run = await db.payrollRun.findFirst({ where: { id: payrollRunId, orgId: session.orgId } });
   if (!run || run.status === "FINALIZED") return;
@@ -100,7 +100,7 @@ export async function finalizePayrollRun(payrollRunId: string): Promise<void> {
 }
 
 export async function deleteDraftPayrollRun(payrollRunId: string): Promise<void> {
-  const session = await assertSession(["OWNER", "ADMIN"]);
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const run = await db.payrollRun.findFirst({ where: { id: payrollRunId, orgId: session.orgId } });
   if (!run || run.status === "FINALIZED") return;

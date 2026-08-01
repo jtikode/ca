@@ -9,6 +9,14 @@ const PUBLIC_PATHS = ["/login", "/signup"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // /platform is a separate namespace with its own cookie and its own
+  // requirePlatformSession() checks on every page — never gate it on the
+  // tenant cookie, and never let the tenant redirect rules touch it.
+  if (pathname.startsWith("/platform")) {
+    return NextResponse.next();
+  }
+
   const hasSession = request.cookies.has("payroll_session");
 
   if (!hasSession && !PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {

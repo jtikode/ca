@@ -7,6 +7,8 @@ export interface SessionData {
   orgId?: string;
   role?: UserRole;
   name?: string;
+  // Only set when role=EMPLOYEE — the Employee record this login may view.
+  employeeId?: string;
 }
 
 const sessionOptions = {

@@ -8,21 +8,30 @@ import { currentFinancialYear } from "@/lib/dates";
 
 export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await requireSession();
+  const session = await requireSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const employee = await db.employee.findFirst({
     where: { id, orgId: session.orgId },
     include: {
       salaryStructures: { orderBy: { effectiveFrom: "desc" } },
+      loginUser: { select: { email: true } },
     },
   });
 
   if (!employee) notFound();
 
   const financialYear = currentFinancialYear();
-  const taxDeclaration = await db.taxDeclaration.findUnique({
-    where: { employeeId_financialYear: { employeeId: id, financialYear } },
-  });
+  const [taxDeclaration, pendingSalaryRequests] = await Promise.all([
+    db.taxDeclaration.findUnique({
+      where: { employeeId_financialYear: { employeeId: id, financialYear } },
+    }),
+    db.approvalRequest.findMany({
+      where: { orgId: session.orgId, type: "UPDATE_SALARY", status: "PENDING" },
+    }),
+  ]);
+  const hasPendingSalaryRequest = pendingSalaryRequests.some(
+    (req) => (req.payload as { employeeId?: string }).employeeId === id,
+  );
 
   const latest = employee.salaryStructures[0];
 
@@ -33,6 +42,19 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         <p className="text-sm text-slate-500">
           {employee.employeeCode} · {employee.state} · Joined {employee.doj.toLocaleDateString("en-IN")}
         </p>
+        <p className="mt-1 text-sm text-slate-500">
+          {employee.loginUser ? (
+            <>Self-service login: {employee.loginUser.email}</>
+          ) : (
+            <>
+              No self-service login yet — create one from the{" "}
+              <a href="/team" className="font-semibold text-blue-700 hover:underline">
+                Team page
+              </a>
+              .
+            </>
+          )}
+        </p>
       </div>
 
       <Card>
@@ -41,6 +63,11 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
           Saving creates a new revision effective today; past payroll runs keep referencing the structure that was
           in force at the time.
         </p>
+        {hasPendingSalaryRequest && (
+          <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">
+            A salary change for this employee is pending superadmin approval.
+          </p>
+        )}
         {latest && (
           <SalaryStructureForm
             employeeId={employee.id}

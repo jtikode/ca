@@ -38,7 +38,12 @@ export function SalaryStructureForm({
         </Button>
       </div>
       {state.error && <p className="col-span-full text-sm font-medium text-red-600">{state.error}</p>}
-      {state.ok && <p className="col-span-full text-sm font-medium text-green-700">Salary structure updated.</p>}
+      {state.ok && state.pending && (
+        <p className="col-span-full text-sm font-medium text-amber-700">Submitted — awaiting superadmin approval.</p>
+      )}
+      {state.ok && !state.pending && (
+        <p className="col-span-full text-sm font-medium text-green-700">Salary structure updated.</p>
+      )}
     </form>
   );
 }

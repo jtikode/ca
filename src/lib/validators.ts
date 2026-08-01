@@ -53,6 +53,26 @@ export const taxDeclarationSchema = z.object({
   otherIncome: z.coerce.number().nonnegative().default(0),
 });
 
+// Excel cells arrive as real booleans, "TRUE"/"FALSE", "Yes"/"No", or blank
+// — unlike the single-add form's checkbox ("on"/"true" only). Blank defaults
+// to true, matching the single-add form's defaultChecked.
+const flexibleBoolean = z.preprocess((v) => {
+  if (typeof v === "boolean") return v;
+  if (v == null || v === "") return true;
+  return ["true", "yes", "y", "1"].includes(String(v).trim().toLowerCase());
+}, z.boolean());
+
+export const employeeImportRowSchema = employeeSchema.extend({
+  pfApplicable: flexibleBoolean,
+  esiApplicable: flexibleBoolean,
+  // Unlike the single-add form (where an empty basic/HRA cell can't be
+  // submitted at all thanks to the HTML `required` attribute), a blank
+  // spreadsheet cell coerces to 0 and would otherwise pass `.nonnegative()`
+  // silently — require a real positive value for a bulk row instead.
+  basic: z.coerce.number().positive("Basic salary is required and must be greater than 0."),
+  hra: z.coerce.number().nonnegative("HRA must be 0 or greater."),
+});
+
 export const payrollRunInputSchema = z.object({
   month: z.coerce.number().int().min(1).max(12),
   year: z.coerce.number().int().min(2020).max(2100),

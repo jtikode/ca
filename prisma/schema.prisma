@@ -11,9 +11,20 @@ datasource db {
 }
 
 enum UserRole {
-  OWNER
-  ADMIN
-  ACCOUNTANT
+  SUPERADMIN
+  HR_MANAGER
+  EMPLOYEE
+}
+
+enum ApprovalRequestType {
+  CREATE_EMPLOYEE
+  UPDATE_SALARY
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum EmployeeStatus {
@@ -34,28 +45,48 @@ enum PayrollRunStatus {
 // One row per SMB customer of this SaaS. Every other business record is
 // scoped to an Organization for tenant isolation.
 model Organization {
-  id                String   @id @default(cuid())
-  name              String
-  legalName         String?
-  pan               String?
-  tan               String?
-  state             String
-  pfRegistrationNo  String?
-  esiRegistrationNo String?
+  id                       String   @id @default(cuid())
+  name                     String
+  legalName                String?
+  pan                      String?
+  tan                      String?
+  state                    String
+  pfRegistrationNo         String?
+  esiRegistrationNo        String?
   // Voluntary registration is possible below the statutory employee-count
   // threshold, so this is an explicit admin toggle rather than derived from
   // headcount.
-  pfApplicable      Boolean  @default(true)
-  esiApplicable     Boolean  @default(true)
-  financialYearStartMonth Int @default(4)
-  createdAt         DateTime @default(now())
+  pfApplicable             Boolean  @default(true)
+  esiApplicable            Boolean  @default(true)
+  financialYearStartMonth  Int      @default(4)
+  // Null for self-service /signup orgs; set when provisioned from the
+  // platform admin console instead.
+  createdByPlatformAdminId String?
+  createdAt                DateTime @default(now())
 
-  users          User[]
-  employees      Employee[]
-  payrollRuns    PayrollRun[]
-  caExportBatches CAExportBatch[]
+  users                  User[]
+  employees              Employee[]
+  payrollRuns            PayrollRun[]
+  caExportBatches        CAExportBatch[]
+  approvalRequests       ApprovalRequest[]
+  createdByPlatformAdmin PlatformAdmin?    @relation(fields: [createdByPlatformAdminId], references: [id])
 
   @@index([state])
+}
+
+// Deliberately separate from User/Organization — the SaaS operator's own
+// login, not a tenant. No orgId, never appears in any tenant-scoped query,
+// authenticated via its own session cookie (see src/lib/platformSession.ts)
+// sealed with a different secret than the tenant session. Scoped narrowly to
+// creating/listing companies — never opens a tenant's actual payroll data.
+model PlatformAdmin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+
+  createdOrganizations Organization[]
 }
 
 model User {
@@ -64,10 +95,16 @@ model User {
   email        String   @unique
   passwordHash String
   name         String
-  role         UserRole @default(OWNER)
+  role         UserRole @default(SUPERADMIN)
+  // Set only for role=EMPLOYEE — links a self-service login to the payroll
+  // record it's allowed to see.
+  employeeId   String?  @unique
   createdAt    DateTime @default(now())
 
-  organization Organization @relation(fields: [orgId], references: [id])
+  organization       Organization      @relation(fields: [orgId], references: [id])
+  employee           Employee?         @relation(fields: [employeeId], references: [id])
+  requestedApprovals ApprovalRequest[] @relation("RequestedApprovals")
+  reviewedApprovals  ApprovalRequest[] @relation("ReviewedApprovals")
 
   @@index([orgId])
 }
@@ -81,6 +118,9 @@ model Employee {
   gender        String?
   doj           DateTime
   dol           DateTime?
+  // Only needed to create a self-service login (see User.employeeId) — not
+  // used for payroll calculation.
+  email         String?
   pan           String?
   uan           String?
   esiNumber     String?
@@ -93,10 +133,11 @@ model Employee {
   status        EmployeeStatus @default(ACTIVE)
   createdAt     DateTime       @default(now())
 
-  organization      Organization       @relation(fields: [orgId], references: [id])
-  salaryStructures   SalaryStructure[]
-  taxDeclarations    TaxDeclaration[]
-  payslipLines       PayslipLine[]
+  organization     Organization      @relation(fields: [orgId], references: [id])
+  salaryStructures SalaryStructure[]
+  taxDeclarations  TaxDeclaration[]
+  payslipLines     PayslipLine[]
+  loginUser        User?
 
   @@unique([orgId, employeeCode])
   @@index([orgId])
@@ -106,18 +147,18 @@ model Employee {
 // Versioned by effectiveFrom so past payroll runs keep referencing the
 // structure that was actually in force at the time, even after a revision.
 model SalaryStructure {
-  id                String   @id @default(cuid())
-  employeeId        String
-  effectiveFrom     DateTime
-  basic             Decimal
-  hra               Decimal
-  conveyance        Decimal  @default(0)
-  medicalAllowance  Decimal  @default(0)
-  specialAllowance  Decimal  @default(0)
+  id               String   @id @default(cuid())
+  employeeId       String
+  effectiveFrom    DateTime
+  basic            Decimal
+  hra              Decimal
+  conveyance       Decimal  @default(0)
+  medicalAllowance Decimal  @default(0)
+  specialAllowance Decimal  @default(0)
   // Free-form extra components ({ name: string, amount: number }[]) for
   // org-specific allowances that don't warrant their own column.
-  otherAllowances   Json?
-  createdAt         DateTime @default(now())
+  otherAllowances  Json?
+  createdAt        DateTime @default(now())
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
@@ -145,13 +186,13 @@ model TaxDeclaration {
 }
 
 model PayrollRun {
-  id           String            @id @default(cuid())
-  orgId        String
-  month        Int
-  year         Int
-  status       PayrollRunStatus  @default(DRAFT)
-  finalizedAt  DateTime?
-  createdAt    DateTime          @default(now())
+  id          String           @id @default(cuid())
+  orgId       String
+  month       Int
+  year        Int
+  status      PayrollRunStatus @default(DRAFT)
+  finalizedAt DateTime?
+  createdAt   DateTime         @default(now())
 
   organization    Organization    @relation(fields: [orgId], references: [id])
   payslipLines    PayslipLine[]
@@ -164,26 +205,26 @@ model PayrollRun {
 // Immutable once the parent run is finalized — corrections happen via a new
 // run, not by editing history.
 model PayslipLine {
-  id             String   @id @default(cuid())
-  payrollRunId   String
-  employeeId     String
-  daysInMonth    Int
-  daysPaid       Decimal
+  id            String   @id @default(cuid())
+  payrollRunId  String
+  employeeId    String
+  daysInMonth   Int
+  daysPaid      Decimal
   // Full earnings breakup at the time of the run ({ basic, hra, ... }).
-  earnings       Json
-  grossEarnings  Decimal
-  pfWages        Decimal
-  pfEmployee     Decimal
-  pfEmployer     Decimal
-  pfEps          Decimal
-  pfEdli         Decimal
-  esiWages       Decimal
-  esiEmployee    Decimal
-  esiEmployer    Decimal
-  ptAmount       Decimal
-  tdsAmount      Decimal
-  netPay         Decimal
-  createdAt      DateTime @default(now())
+  earnings      Json
+  grossEarnings Decimal
+  pfWages       Decimal
+  pfEmployee    Decimal
+  pfEmployer    Decimal
+  pfEps         Decimal
+  pfEdli        Decimal
+  esiWages      Decimal
+  esiEmployee   Decimal
+  esiEmployer   Decimal
+  ptAmount      Decimal
+  tdsAmount     Decimal
+  netPay        Decimal
+  createdAt     DateTime @default(now())
 
   payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id])
   employee   Employee   @relation(fields: [employeeId], references: [id])
@@ -233,4 +274,27 @@ model CAExportBatch {
 
   @@index([orgId])
   @@index([payrollRunId])
+}
+
+// Sensitive edits made by HR_MANAGER (create employee, change salary) land
+// here instead of writing directly — SUPERADMIN approves or rejects.
+// Approving applies `payload` transactionally. SUPERADMIN's own edits skip
+// this entirely and write directly, same as before this model existed.
+model ApprovalRequest {
+  id            String              @id @default(cuid())
+  orgId         String
+  type          ApprovalRequestType
+  payload       Json
+  status        ApprovalStatus      @default(PENDING)
+  requestedById String
+  reviewedById  String?
+  reviewNote    String?
+  createdAt     DateTime            @default(now())
+  reviewedAt    DateTime?
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  requestedBy  User         @relation("RequestedApprovals", fields: [requestedById], references: [id])
+  reviewedBy   User?        @relation("ReviewedApprovals", fields: [reviewedById], references: [id])
+
+  @@index([orgId, status])
 }

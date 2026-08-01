@@ -6,7 +6,7 @@ import { NewRunForm } from "@/components/payroll/NewRunForm";
 import { MONTH_NAMES } from "@/lib/dates";
 
 export default async function PayrollPage() {
-  const session = await requireSession();
+  const session = await requireSession(["SUPERADMIN", "HR_MANAGER"]);
   const runs = await db.payrollRun.findMany({
     where: { orgId: session.orgId },
     orderBy: [{ year: "desc" }, { month: "desc" }],

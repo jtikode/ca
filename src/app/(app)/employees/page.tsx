@@ -3,23 +3,48 @@ import { requireSession } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { Card } from "@/components/ui/Card";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
+import { BulkUploadForm } from "@/components/employees/BulkUploadForm";
 import { toggleEmployeeStatus } from "@/actions/employeeActions";
 import { grossFromEarnings } from "@/lib/statutory";
 
 export default async function EmployeesPage() {
-  const session = await requireSession();
+  const session = await requireSession(["SUPERADMIN", "HR_MANAGER"]);
 
-  const employees = await db.employee.findMany({
-    where: { orgId: session.orgId },
-    orderBy: { createdAt: "desc" },
-    include: { salaryStructures: { orderBy: { effectiveFrom: "desc" }, take: 1 } },
-  });
+  const [employees, pendingApprovalCount] = await Promise.all([
+    db.employee.findMany({
+      where: { orgId: session.orgId },
+      orderBy: { createdAt: "desc" },
+      include: { salaryStructures: { orderBy: { effectiveFrom: "desc" }, take: 1 } },
+    }),
+    session.role === "SUPERADMIN"
+      ? db.approvalRequest.count({ where: { orgId: session.orgId, status: "PENDING" } })
+      : Promise.resolve(0),
+  ]);
 
   return (
     <div className="space-y-6">
+      {pendingApprovalCount > 0 && (
+        <Card className="border-amber-200 bg-amber-50">
+          <p className="text-sm font-medium text-amber-800">
+            {pendingApprovalCount} request{pendingApprovalCount === 1 ? "" : "s"} waiting for your approval.{" "}
+            <Link href="/approvals" className="font-semibold underline">
+              Review now
+            </Link>
+          </p>
+        </Card>
+      )}
+
       <Card>
         <h2 className="mb-4 text-lg font-bold text-slate-900">Add employee</h2>
         <EmployeeForm />
+      </Card>
+
+      <Card>
+        <h2 className="mb-1 text-lg font-bold text-slate-900">Bulk upload</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          Download the template, fill in one row per employee, then upload the same file.
+        </p>
+        <BulkUploadForm />
       </Card>
 
       <Card className="overflow-x-auto">

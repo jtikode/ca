@@ -8,7 +8,7 @@ import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { SUPPORTED_STATES } from "@/lib/validators";
 
-const initialState: ActionResult = { ok: false, error: undefined };
+const initialState: ActionResult = { ok: false, error: undefined, pending: false };
 
 export function EmployeeForm() {
   const [state, formAction, pending] = useActionState(createEmployee, initialState);
@@ -75,7 +75,10 @@ export function EmployeeForm() {
           {pending ? "Adding..." : "Add employee"}
         </Button>
         {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
-        {state.ok && <p className="text-sm font-medium text-green-700">Employee added.</p>}
+        {state.ok && state.pending && (
+          <p className="text-sm font-medium text-amber-700">Submitted — awaiting superadmin approval.</p>
+        )}
+        {state.ok && !state.pending && <p className="text-sm font-medium text-green-700">Employee added.</p>}
       </div>
     </form>
   );
