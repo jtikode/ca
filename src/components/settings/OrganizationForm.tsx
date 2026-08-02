@@ -13,6 +13,7 @@ export function OrganizationForm({
 }: {
   defaults: {
     legalName: string;
+    address: string;
     pan: string;
     tan: string;
     pfRegistrationNo: string;
@@ -27,6 +28,9 @@ export function OrganizationForm({
     <form action={formAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <Field label="Legal name">
         <Input name="legalName" defaultValue={defaults.legalName} />
+      </Field>
+      <Field label="Address">
+        <Input name="address" defaultValue={defaults.address} placeholder="Used on HR letters" />
       </Field>
       <Field label="PAN">
         <Input name="pan" defaultValue={defaults.pan} />

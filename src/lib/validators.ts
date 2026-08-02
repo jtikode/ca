@@ -22,6 +22,10 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required."),
 });
 
+export const EMPLOYMENT_STAGES = ["PROBATION", "CONFIRMED"] as const;
+export const EMPLOYMENT_BASES = ["PERMANENT", "CONTRACT"] as const;
+export const EMPLOYEE_CATEGORIES = ["NON_MANAGERIAL", "MANAGERIAL"] as const;
+
 export const employeeSchema = z.object({
   employeeCode: z.string().min(1, "Employee code is required."),
   name: z.string().min(1, "Name is required."),
@@ -41,6 +45,20 @@ export const employeeSchema = z.object({
   conveyance: z.coerce.number().nonnegative().default(0),
   medicalAllowance: z.coerce.number().nonnegative().default(0),
   specialAllowance: z.coerce.number().nonnegative().default(0),
+  designation: optionalString,
+  employmentStage: z.enum(EMPLOYMENT_STAGES).default("PROBATION"),
+  employmentBasis: z.enum(EMPLOYMENT_BASES).default("PERMANENT"),
+  employeeCategory: z.enum(EMPLOYEE_CATEGORIES).default("NON_MANAGERIAL"),
+});
+
+export const updateEmployeeDetailsSchema = z.object({
+  designation: optionalString,
+  employmentStage: z.enum(EMPLOYMENT_STAGES),
+  probationEndDate: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
+  employmentBasis: z.enum(EMPLOYMENT_BASES),
+  employeeCategory: z.enum(EMPLOYEE_CATEGORIES),
+  ptApplicable: booleanFromCheckbox,
+  dol: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
 });
 
 export const taxDeclarationSchema = z.object({

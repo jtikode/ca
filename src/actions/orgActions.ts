@@ -13,6 +13,7 @@ export async function updateOrganization(_prevState: ActionResult | null, formDa
   const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   const legalName = (formData.get("legalName") as string) || null;
+  const address = (formData.get("address") as string) || null;
   const pan = (formData.get("pan") as string) || null;
   const tan = (formData.get("tan") as string) || null;
   const pfRegistrationNo = (formData.get("pfRegistrationNo") as string) || null;
@@ -22,7 +23,7 @@ export async function updateOrganization(_prevState: ActionResult | null, formDa
 
   await db.organization.update({
     where: { id: session.orgId },
-    data: { legalName, pan, tan, pfRegistrationNo, esiRegistrationNo, pfApplicable, esiApplicable },
+    data: { legalName, address, pan, tan, pfRegistrationNo, esiRegistrationNo, pfApplicable, esiApplicable },
   });
 
   revalidatePath("/settings");

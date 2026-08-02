@@ -42,12 +42,30 @@ enum PayrollRunStatus {
   FINALIZED
 }
 
+enum EmploymentStage {
+  PROBATION
+  CONFIRMED
+}
+
+enum EmploymentBasis {
+  PERMANENT
+  CONTRACT
+}
+
+enum EmployeeCategory {
+  NON_MANAGERIAL
+  MANAGERIAL
+}
+
 // One row per SMB customer of this SaaS. Every other business record is
 // scoped to an Organization for tenant isolation.
 model Organization {
   id                       String   @id @default(cuid())
   name                     String
   legalName                String?
+  // Used on generated HR letters (offer/appointment/experience/relieving) —
+  // blank renders as a placeholder there rather than blocking generation.
+  address                  String?
   pan                      String?
   tan                      String?
   state                    String
@@ -110,28 +128,39 @@ model User {
 }
 
 model Employee {
-  id            String         @id @default(cuid())
-  orgId         String
-  employeeCode  String
-  name          String
-  dob           DateTime?
-  gender        String?
-  doj           DateTime
-  dol           DateTime?
+  id               String           @id @default(cuid())
+  orgId            String
+  employeeCode     String
+  name             String
+  dob              DateTime?
+  gender           String?
+  doj              DateTime
+  // Set at exit — required before the experience/relieving letters can be
+  // generated (see src/lib/hrLetters.ts).
+  dol              DateTime?
   // Only needed to create a self-service login (see User.employeeId) — not
   // used for payroll calculation.
-  email         String?
-  pan           String?
-  uan           String?
-  esiNumber     String?
-  bankAccountNo String?
-  bankIfsc      String?
-  // Drives which PTSlab applies during a payroll run.
-  state         String
-  pfApplicable  Boolean        @default(true)
-  esiApplicable Boolean        @default(true)
-  status        EmployeeStatus @default(ACTIVE)
-  createdAt     DateTime       @default(now())
+  email            String?
+  pan              String?
+  uan              String?
+  esiNumber        String?
+  bankAccountNo    String?
+  bankIfsc         String?
+  // Drives which PTSlab and LeavePolicy apply.
+  state            String
+  pfApplicable     Boolean          @default(true)
+  esiApplicable    Boolean          @default(true)
+  // Per-employee PT opt-out, mirroring pfApplicable/esiApplicable above.
+  ptApplicable     Boolean          @default(true)
+  status           EmployeeStatus   @default(ACTIVE)
+  // Used on generated HR letters — "appointed as ___".
+  designation      String?
+  employmentStage  EmploymentStage  @default(PROBATION)
+  // Relevant only while employmentStage=PROBATION.
+  probationEndDate DateTime?
+  employmentBasis  EmploymentBasis  @default(PERMANENT)
+  employeeCategory EmployeeCategory @default(NON_MANAGERIAL)
+  createdAt        DateTime         @default(now())
 
   organization     Organization      @relation(fields: [orgId], references: [id])
   salaryStructures SalaryStructure[]
@@ -247,6 +276,20 @@ model PTSlab {
   createdAt     DateTime @default(now())
 
   @@index([state, effectiveFrom])
+}
+
+// Statutory leave entitlement per the state's Shops & Establishments Act —
+// shown as-is (an annual entitlement, not a running balance net of leave
+// taken; there's no leave-tracking module yet). Earned leave is technically
+// proportional to days worked, not a flat number — this is a full-year
+// approximation. Admin-viewable only, not editable, same as PTSlab today.
+model LeavePolicy {
+  id                 String   @id @default(cuid())
+  state              String   @unique
+  casualLeavePerYear Int
+  sickLeavePerYear   Int
+  earnedLeavePerYear Int
+  createdAt          DateTime @default(now())
 }
 
 model IncomeTaxSlab {

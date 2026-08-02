@@ -42,7 +42,24 @@ const OLD_REGIME_SLABS: { minIncome: number; maxIncome: number | null; rate: num
   { minIncome: 1_000_000, maxIncome: null, rate: 0.3 },
 ];
 
+// Statutory leave entitlement per the state's Shops & Establishments Act —
+// see prisma/schema.prisma's LeavePolicy comment for the caveats (annual
+// entitlement only, not a running balance; earned leave is a full-year
+// approximation). Verify against the current Act before relying on it.
+const LEAVE_POLICIES: { state: string; casualLeavePerYear: number; sickLeavePerYear: number; earnedLeavePerYear: number }[] = [
+  { state: "Maharashtra", casualLeavePerYear: 8, sickLeavePerYear: 15, earnedLeavePerYear: 15 },
+  { state: "Karnataka", casualLeavePerYear: 12, sickLeavePerYear: 12, earnedLeavePerYear: 12 },
+];
+
 async function main() {
+  const existingLeavePolicies = await db.leavePolicy.count();
+  if (existingLeavePolicies === 0) {
+    await db.leavePolicy.createMany({ data: LEAVE_POLICIES });
+    console.log(`Seeded ${LEAVE_POLICIES.length} leave policies.`);
+  } else {
+    console.log("Leave policies already seeded, skipping.");
+  }
+
   const existingSlabs = await db.pTSlab.count();
   if (existingSlabs === 0) {
     await db.pTSlab.createMany({

@@ -77,7 +77,9 @@ export async function computePayslipLine(
 
   const pf = calculatePF(proratedEarnings.basic, org.pfApplicable && employee.pfApplicable);
   const esi = calculateESI(grossEarnings, org.esiApplicable && employee.esiApplicable);
-  const ptAmount = await calculatePT(employee.state, grossEarnings, new Date(year, month - 1, 1));
+  const ptAmount = employee.ptApplicable
+    ? await calculatePT(employee.state, grossEarnings, new Date(year, month - 1, 1))
+    : 0;
 
   const financialYear = currentFinancialYear();
   const taxDeclaration = await db.taxDeclaration.findUnique({

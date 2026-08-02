@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { bulkUploadEmployees, type BulkUploadResult } from "@/actions/employeeActions";
 import { Button } from "@/components/ui/Button";
 
@@ -12,12 +13,12 @@ export function BulkUploadForm() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <a
+        <Link
           href="/api/employees/template"
           className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           Download template
-        </a>
+        </Link>
         <form action={formAction} className="flex flex-wrap items-center gap-3">
           <input
             type="file"

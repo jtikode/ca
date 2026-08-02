@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { assertSession } from "@/lib/permissions";
-import { employeeSchema, taxDeclarationSchema } from "@/lib/validators";
+import { employeeSchema, taxDeclarationSchema, updateEmployeeDetailsSchema } from "@/lib/validators";
 import { parseEmployeeImport, type ImportError } from "@/lib/employeeImport";
 
 export interface ActionResult {
@@ -42,6 +42,10 @@ export async function createEmployee(_prevState: ActionResult | null, formData: 
     conveyance: formData.get("conveyance"),
     medicalAllowance: formData.get("medicalAllowance"),
     specialAllowance: formData.get("specialAllowance"),
+    designation: formData.get("designation"),
+    employmentStage: formData.get("employmentStage"),
+    employmentBasis: formData.get("employmentBasis"),
+    employeeCategory: formData.get("employeeCategory"),
   });
 
   if (!parsed.success) {
@@ -187,6 +191,44 @@ export async function saveTaxDeclaration(
     where: { employeeId_financialYear: { employeeId, financialYear: parsed.data.financialYear } },
     create: { employeeId, ...parsed.data },
     update: parsed.data,
+  });
+
+  revalidatePath(`/employees/${employeeId}`);
+  return { ok: true };
+}
+
+// Not approval-gated, unlike createEmployee/updateSalaryStructure — the
+// plan's scope decision is that only employee-creation and salary changes
+// need superadmin sign-off.
+export async function updateEmployeeDetails(
+  employeeId: string,
+  _prevState: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
+
+  const employee = await db.employee.findFirst({ where: { id: employeeId, orgId: session.orgId } });
+  if (!employee) {
+    return { ok: false, error: "Employee not found." };
+  }
+
+  const parsed = updateEmployeeDetailsSchema.safeParse({
+    designation: formData.get("designation"),
+    employmentStage: formData.get("employmentStage"),
+    probationEndDate: formData.get("probationEndDate"),
+    employmentBasis: formData.get("employmentBasis"),
+    employeeCategory: formData.get("employeeCategory"),
+    ptApplicable: formData.get("ptApplicable"),
+    dol: formData.get("dol"),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  await db.employee.update({
+    where: { id: employeeId },
+    data: parsed.data,
   });
 
   revalidatePath(`/employees/${employeeId}`);

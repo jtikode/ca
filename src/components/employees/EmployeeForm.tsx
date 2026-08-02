@@ -8,6 +8,10 @@ import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { SUPPORTED_STATES } from "@/lib/validators";
 
+const EMPLOYMENT_STAGE_LABELS: Record<string, string> = { PROBATION: "Probation", CONFIRMED: "Confirmed" };
+const EMPLOYMENT_BASIS_LABELS: Record<string, string> = { PERMANENT: "Permanent", CONTRACT: "Contract" };
+const EMPLOYEE_CATEGORY_LABELS: Record<string, string> = { NON_MANAGERIAL: "Non-managerial", MANAGERIAL: "Managerial" };
+
 const initialState: ActionResult = { ok: false, error: undefined, pending: false };
 
 export function EmployeeForm() {
@@ -46,6 +50,36 @@ export function EmployeeForm() {
       </Field>
       <Field label="Bank IFSC">
         <Input name="bankIfsc" />
+      </Field>
+      <Field label="Designation">
+        <Input name="designation" placeholder="e.g. Sales Executive" />
+      </Field>
+      <Field label="Employment stage">
+        <Select name="employmentStage" defaultValue="PROBATION">
+          {Object.entries(EMPLOYMENT_STAGE_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Employment basis">
+        <Select name="employmentBasis" defaultValue="PERMANENT">
+          {Object.entries(EMPLOYMENT_BASIS_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Category">
+        <Select name="employeeCategory" defaultValue="NON_MANAGERIAL">
+          {Object.entries(EMPLOYEE_CATEGORY_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
       </Field>
 
       <Field label="Basic (monthly)">

@@ -106,6 +106,45 @@ export async function calculatePT(state: string, grossEarnings: number, asOf: Da
   return slab ? Number(slab.monthlyAmount) : 0;
 }
 
+// Payment of Gratuity Act, 1972 — central law, applies uniformly regardless
+// of state.
+export const GRATUITY_ELIGIBILITY_YEARS = 5;
+export const GRATUITY_DAYS_PER_YEAR = 15;
+export const GRATUITY_WAGE_DIVISOR = 26;
+
+export interface GratuityResult {
+  completedYears: number;
+  accruedAmount: number;
+  eligibleAt: Date;
+  /** null once already past the 5-year eligibility mark. */
+  daysUntilEligible: number | null;
+}
+
+/** Eligible after 5 years of continuous service (death/disablement
+ * exceptions not modeled here). Formula: (Basic × 15 × completed years) / 26
+ * — this app doesn't track DA separately, so accrual uses Basic only, same
+ * simplification already used for PF. A final partial year rounds up to a
+ * full year once it exceeds 6 months, per the Act. */
+export function calculateGratuity(basic: number, doj: Date, asOf: Date = new Date()): GratuityResult {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const totalDays = Math.max(0, Math.floor((asOf.getTime() - doj.getTime()) / msPerDay));
+  const totalYearsExact = totalDays / 365.25;
+
+  const wholeYears = Math.floor(totalYearsExact);
+  const remainderYears = totalYearsExact - wholeYears;
+  const completedYears = remainderYears > 0.5 ? wholeYears + 1 : wholeYears;
+
+  const accruedAmount = round((basic * GRATUITY_DAYS_PER_YEAR * completedYears) / GRATUITY_WAGE_DIVISOR);
+
+  const eligibleAt = new Date(doj);
+  eligibleAt.setFullYear(eligibleAt.getFullYear() + GRATUITY_ELIGIBILITY_YEARS);
+
+  const daysUntilEligible =
+    asOf >= eligibleAt ? null : Math.ceil((eligibleAt.getTime() - asOf.getTime()) / msPerDay);
+
+  return { completedYears, accruedAmount, eligibleAt, daysUntilEligible };
+}
+
 export interface TDSInput {
   annualGross: number;
   regime: TaxRegime;
