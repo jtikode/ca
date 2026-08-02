@@ -57,6 +57,11 @@ enum EmployeeCategory {
   MANAGERIAL
 }
 
+enum PayMode {
+  MONTHLY
+  HOURLY_ATTENDANCE
+}
+
 // One row per SMB customer of this SaaS. Every other business record is
 // scoped to an Organization for tenant isolation.
 model Organization {
@@ -80,6 +85,9 @@ model Organization {
   // Null for self-service /signup orgs; set when provisioned from the
   // platform admin console instead.
   createdByPlatformAdminId String?
+  // Off by default so an org doesn't get surprise emails/costs until HR
+  // opts in. Manual "Email payslip" sends ignore this toggle entirely.
+  payslipEmailEnabled      Boolean  @default(false)
   createdAt                DateTime @default(now())
 
   users                  User[]
@@ -87,6 +95,8 @@ model Organization {
   payrollRuns            PayrollRun[]
   caExportBatches        CAExportBatch[]
   approvalRequests       ApprovalRequest[]
+  attendances            Attendance[]
+  leavePolicy            LeavePolicy?
   createdByPlatformAdmin PlatformAdmin?    @relation(fields: [createdByPlatformAdminId], references: [id])
 
   @@index([state])
@@ -143,10 +153,13 @@ model Employee {
   email            String?
   pan              String?
   uan              String?
+  // ESIC Insured Person (IP) number.
   esiNumber        String?
+  // Maharashtra Labour Welfare Fund labour identification number.
+  mlwfIdNumber     String?
   bankAccountNo    String?
   bankIfsc         String?
-  // Drives which PTSlab and LeavePolicy apply.
+  // Drives which PTSlab applies and which org LeavePolicy is shown.
   state            String
   pfApplicable     Boolean          @default(true)
   esiApplicable    Boolean          @default(true)
@@ -160,12 +173,23 @@ model Employee {
   probationEndDate DateTime?
   employmentBasis  EmploymentBasis  @default(PERMANENT)
   employeeCategory EmployeeCategory @default(NON_MANAGERIAL)
+  // MONTHLY = standard calendar-proration pay (existing behavior).
+  // HOURLY_ATTENDANCE = paid via Attendance-derived days-present, with a
+  // free-leave allowance before excessLeaveDailyDeduction kicks in on Basic
+  // only — see src/lib/payrollEngine.ts.
+  payMode                   PayMode  @default(MONTHLY)
+  shiftHoursPerDay          Decimal?
+  freeLeaveDaysPerMonth     Int?
+  // Rupee deduction from Basic per day of absence beyond freeLeaveDaysPerMonth.
+  // UI suggests basic÷daysInMonth as a default; HR can override per employee.
+  excessLeaveDailyDeduction Decimal?
   createdAt        DateTime         @default(now())
 
   organization     Organization      @relation(fields: [orgId], references: [id])
   salaryStructures SalaryStructure[]
   taxDeclarations  TaxDeclaration[]
   payslipLines     PayslipLine[]
+  attendances      Attendance[]
   loginUser        User?
 
   @@unique([orgId, employeeCode])
@@ -181,11 +205,19 @@ model SalaryStructure {
   effectiveFrom    DateTime
   basic            Decimal
   hra              Decimal
+  // Dearness Allowance — included in the PF and ESI wage-basis formulas
+  // alongside basic (see src/lib/statutory.ts), but not itself subject to
+  // the HOURLY_ATTENDANCE free-leave/cutting rule (that applies to basic only).
+  da               Decimal  @default(0)
   conveyance       Decimal  @default(0)
   medicalAllowance Decimal  @default(0)
   specialAllowance Decimal  @default(0)
-  // Free-form extra components ({ name: string, amount: number }[]) for
-  // org-specific allowances that don't warrant their own column.
+  // Free-form extra components for org-specific allowances that don't
+  // warrant their own column:
+  // { name: string, amount: number, basis: "FIXED" | "ATTENDANCE" }[]
+  // FIXED is paid in full regardless of attendance; ATTENDANCE is prorated
+  // the same way basic/hra/etc. are (by days-paid ratio for MONTHLY
+  // employees, or by days-present ratio for HOURLY_ATTENDANCE employees).
   otherAllowances  Json?
   createdAt        DateTime @default(now())
 
@@ -252,6 +284,11 @@ model PayslipLine {
   esiEmployer   Decimal
   ptAmount      Decimal
   tdsAmount     Decimal
+  // Rupee amount deducted from Basic for HOURLY_ATTENDANCE employees whose
+  // absences exceeded their free-leave allowance that month. Zero for
+  // MONTHLY employees. Recorded here (rather than only in `earnings`) so the
+  // payslip PDF can show it as an explicit, transparent line.
+  attendanceDeduction Decimal @default(0)
   netPay        Decimal
   createdAt     DateTime @default(now())
 
@@ -278,18 +315,47 @@ model PTSlab {
   @@index([state, effectiveFrom])
 }
 
-// Statutory leave entitlement per the state's Shops & Establishments Act —
-// shown as-is (an annual entitlement, not a running balance net of leave
-// taken; there's no leave-tracking module yet). Earned leave is technically
-// proportional to days worked, not a flat number — this is a full-year
-// approximation. Admin-viewable only, not editable, same as PTSlab today.
+// Statutory leave entitlement — an annual entitlement, not a running balance
+// net of leave taken; there's no leave-tracking module yet. Earned leave is
+// technically proportional to days worked, not a flat number — this is a
+// full-year approximation. One row per org (editable by HR via Settings) —
+// seeded from state defaults at signup/org-creation time
+// (see src/lib/leavePolicyDefaults.ts), then independent per org from then
+// on. Deliberately NOT state-keyed/shared: two different companies in the
+// same state must be able to set different policies without affecting
+// each other.
 model LeavePolicy {
   id                 String   @id @default(cuid())
-  state              String   @unique
+  orgId              String   @unique
+  state              String
   casualLeavePerYear Int
   sickLeavePerYear   Int
   earnedLeavePerYear Int
   createdAt          DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@index([state])
+}
+
+// Daily attendance facts imported from a biometric-export-derived
+// spreadsheet upload (see src/lib/attendanceImport.ts). Drives payroll
+// calculation for HOURLY_ATTENDANCE employees only — see
+// src/lib/payrollEngine.ts. Re-uploading a file upserts on
+// (employeeId, date), so corrections are just a re-upload.
+model Attendance {
+  id         String   @id @default(cuid())
+  orgId      String
+  employeeId String
+  date       DateTime
+  present    Boolean
+  createdAt  DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+  @@index([orgId, date])
 }
 
 model IncomeTaxSlab {

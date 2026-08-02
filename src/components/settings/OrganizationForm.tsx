@@ -20,6 +20,7 @@ export function OrganizationForm({
     esiRegistrationNo: string;
     pfApplicable: boolean;
     esiApplicable: boolean;
+    payslipEmailEnabled: boolean;
   };
 }) {
   const [state, formAction, pending] = useActionState(updateOrganization, initialState);
@@ -52,6 +53,15 @@ export function OrganizationForm({
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" name="esiApplicable" defaultChecked={defaults.esiApplicable} className="h-4 w-4" />
           ESI applicable
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            name="payslipEmailEnabled"
+            defaultChecked={defaults.payslipEmailEnabled}
+            className="h-4 w-4"
+          />
+          Auto-email payslips when a run is finalized
         </label>
       </div>
       <div className="col-span-full flex items-center gap-3">

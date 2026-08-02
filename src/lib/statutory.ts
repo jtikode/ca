@@ -35,18 +35,30 @@ function round(n: number): number {
   return Math.round(n);
 }
 
+export interface OtherAllowanceItem {
+  name: string;
+  amount: number;
+  /** FIXED is paid in full regardless of attendance; ATTENDANCE prorates the
+   * same way basic/hra/etc. do. */
+  basis: "FIXED" | "ATTENDANCE";
+}
+
 export interface EarningsBreakup {
   basic: number;
   hra: number;
+  /** Dearness Allowance — included in the PF/ESI wage-basis formulas below
+   * alongside basic, but excluded from the HOURLY_ATTENDANCE free-leave
+   * deduction rule (that applies to basic only). */
+  da: number;
   conveyance: number;
   medicalAllowance: number;
   specialAllowance: number;
-  otherAllowances?: { name: string; amount: number }[];
+  otherAllowances?: OtherAllowanceItem[];
 }
 
 export function grossFromEarnings(e: EarningsBreakup): number {
   const otherTotal = (e.otherAllowances ?? []).reduce((sum, a) => sum + a.amount, 0);
-  return e.basic + e.hra + e.conveyance + e.medicalAllowance + e.specialAllowance + otherTotal;
+  return e.basic + e.hra + e.da + e.conveyance + e.medicalAllowance + e.specialAllowance + otherTotal;
 }
 
 export interface PFResult {
@@ -57,14 +69,15 @@ export interface PFResult {
   pfEdli: number;
 }
 
-/** Defaults to capping PF wages at the statutory ceiling, which is what most
- * small employers do unless they opt into voluntary higher contribution. */
-export function calculatePF(basic: number, applicable: boolean): PFResult {
+/** PF wage basis is Basic + DA. Defaults to capping PF wages at the
+ * statutory ceiling, which is what most small employers do unless they opt
+ * into voluntary higher contribution. */
+export function calculatePF(basicPlusDa: number, applicable: boolean): PFResult {
   if (!applicable) {
     return { pfWages: 0, pfEmployee: 0, pfEmployer: 0, pfEps: 0, pfEdli: 0 };
   }
 
-  const pfWages = Math.min(basic, PF_WAGE_CEILING);
+  const pfWages = Math.min(basicPlusDa, PF_WAGE_CEILING);
   const pfEmployee = round(pfWages * PF_EMPLOYEE_RATE);
   const pfEps = Math.min(round(pfWages * PF_EPS_RATE), PF_EPS_MAX_MONTHLY);
   const employerTotal = round(pfWages * PF_EMPLOYER_TOTAL_RATE);
@@ -80,15 +93,23 @@ export interface ESIResult {
   esiEmployer: number;
 }
 
-export function calculateESI(grossEarnings: number, applicable: boolean): ESIResult {
+/** Eligibility (whether ESI applies at all) is still decided by gross wages
+ * against the ceiling. The contribution wage — what the 0.75%/3.25% rates
+ * are actually applied to — is max(basic+DA, 50% of gross), per the
+ * client's stated wage-basis rule. This is always ≤ grossEarnings (basic+DA
+ * can't exceed gross by construction, and 50% of gross ≤ gross), so it never
+ * needs a separate cap once eligibility already confirmed gross ≤ ceiling. */
+export function calculateESI(grossEarnings: number, basicPlusDa: number, applicable: boolean): ESIResult {
   if (!applicable || grossEarnings > ESI_WAGE_CEILING) {
     return { esiWages: 0, esiEmployee: 0, esiEmployer: 0 };
   }
 
+  const esiWages = Math.max(basicPlusDa, grossEarnings * 0.5);
+
   return {
-    esiWages: grossEarnings,
-    esiEmployee: round(grossEarnings * ESI_EMPLOYEE_RATE),
-    esiEmployer: round(grossEarnings * ESI_EMPLOYER_RATE),
+    esiWages,
+    esiEmployee: round(esiWages * ESI_EMPLOYEE_RATE),
+    esiEmployer: round(esiWages * ESI_EMPLOYER_RATE),
   };
 }
 
@@ -122,9 +143,10 @@ export interface GratuityResult {
 
 /** Eligible after 5 years of continuous service (death/disablement
  * exceptions not modeled here). Formula: (Basic × 15 × completed years) / 26
- * — this app doesn't track DA separately, so accrual uses Basic only, same
- * simplification already used for PF. A final partial year rounds up to a
- * full year once it exceeds 6 months, per the Act. */
+ * — the Act technically uses Basic+DA, but gratuity accrual here is Basic
+ * only (a known simplification, unlike PF/ESI which do include DA — see
+ * calculatePF/calculateESI). A final partial year rounds up to a full year
+ * once it exceeds 6 months, per the Act. */
 export function calculateGratuity(basic: number, doj: Date, asOf: Date = new Date()): GratuityResult {
   const msPerDay = 24 * 60 * 60 * 1000;
   const totalDays = Math.max(0, Math.floor((asOf.getTime() - doj.getTime()) / msPerDay));

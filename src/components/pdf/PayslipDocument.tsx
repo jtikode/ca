@@ -39,13 +39,22 @@ export function PayslipDocument({
   netPay,
   daysPaid,
   daysInMonth,
+  attendanceDeduction = 0,
 }: {
   orgName: string;
   employeeName: string;
   employeeCode: string;
   month: number;
   year: number;
-  earnings: { basic: number; hra: number; conveyance: number; medicalAllowance: number; specialAllowance: number };
+  earnings: {
+    basic: number;
+    hra: number;
+    da?: number;
+    conveyance: number;
+    medicalAllowance: number;
+    specialAllowance: number;
+    otherAllowances?: { name: string; amount: number; basis: "FIXED" | "ATTENDANCE" }[];
+  };
   grossEarnings: number;
   pfEmployee: number;
   esiEmployee: number;
@@ -54,6 +63,7 @@ export function PayslipDocument({
   netPay: number;
   daysPaid: number;
   daysInMonth: number;
+  attendanceDeduction?: number;
 }) {
   const totalDeductions = pfEmployee + esiEmployee + ptAmount + tdsAmount;
 
@@ -88,10 +98,22 @@ export function PayslipDocument({
             <Text style={styles.tableCellLabel}>Basic</Text>
             <Text style={styles.tableCellValue}>{inr(earnings.basic)}</Text>
           </View>
+          {attendanceDeduction > 0 && (
+            <View style={styles.tableRow}>
+              <Text style={styles.tableCellLabel}>Attendance deduction (excess absence)</Text>
+              <Text style={styles.tableCellValue}>-{inr(attendanceDeduction)}</Text>
+            </View>
+          )}
           <View style={styles.tableRow}>
             <Text style={styles.tableCellLabel}>HRA</Text>
             <Text style={styles.tableCellValue}>{inr(earnings.hra)}</Text>
           </View>
+          {(earnings.da ?? 0) > 0 && (
+            <View style={styles.tableRow}>
+              <Text style={styles.tableCellLabel}>DA</Text>
+              <Text style={styles.tableCellValue}>{inr(earnings.da ?? 0)}</Text>
+            </View>
+          )}
           <View style={styles.tableRow}>
             <Text style={styles.tableCellLabel}>Conveyance</Text>
             <Text style={styles.tableCellValue}>{inr(earnings.conveyance)}</Text>
@@ -100,6 +122,15 @@ export function PayslipDocument({
             <Text style={styles.tableCellLabel}>Special allowance</Text>
             <Text style={styles.tableCellValue}>{inr(earnings.specialAllowance)}</Text>
           </View>
+          {(earnings.otherAllowances ?? []).map((item, i) => (
+            <View style={styles.tableRow} key={`${item.name}-${i}`}>
+              <Text style={styles.tableCellLabel}>
+                {item.name}
+                {item.basis === "ATTENDANCE" ? " (attendance)" : ""}
+              </Text>
+              <Text style={styles.tableCellValue}>{inr(item.amount)}</Text>
+            </View>
+          ))}
           <View style={styles.tableRow}>
             <Text style={[styles.tableCellLabel, { fontWeight: 700 }]}>Gross earnings</Text>
             <Text style={[styles.tableCellValue, { fontWeight: 700 }]}>{inr(grossEarnings)}</Text>
@@ -138,6 +169,10 @@ export function PayslipDocument({
         <Text style={styles.footer}>
           This is a system-generated payslip. Figures are computed estimates — please have your accountant verify
           statutory deductions before filing.
+        </Text>
+        <Text style={styles.footer}>
+          Salary structure is subject to change from time to time as per applicable laws and change in laws after
+          discussion with employee in writing.
         </Text>
       </Page>
     </Document>

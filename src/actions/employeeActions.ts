@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { assertSession } from "@/lib/permissions";
 import { employeeSchema, taxDeclarationSchema, updateEmployeeDetailsSchema } from "@/lib/validators";
 import { parseEmployeeImport, type ImportError } from "@/lib/employeeImport";
+import type { Prisma } from "@/generated/prisma/client";
 
 export interface ActionResult {
   ok: boolean;
@@ -32,6 +33,7 @@ export async function createEmployee(_prevState: ActionResult | null, formData: 
     pan: formData.get("pan"),
     uan: formData.get("uan"),
     esiNumber: formData.get("esiNumber"),
+    mlwfIdNumber: formData.get("mlwfIdNumber"),
     bankAccountNo: formData.get("bankAccountNo"),
     bankIfsc: formData.get("bankIfsc"),
     state: formData.get("state"),
@@ -39,9 +41,11 @@ export async function createEmployee(_prevState: ActionResult | null, formData: 
     esiApplicable: formData.get("esiApplicable"),
     basic: formData.get("basic"),
     hra: formData.get("hra"),
+    da: formData.get("da"),
     conveyance: formData.get("conveyance"),
     medicalAllowance: formData.get("medicalAllowance"),
     specialAllowance: formData.get("specialAllowance"),
+    otherAllowances: formData.get("otherAllowancesJson"),
     designation: formData.get("designation"),
     employmentStage: formData.get("employmentStage"),
     employmentBasis: formData.get("employmentBasis"),
@@ -69,7 +73,7 @@ export async function createEmployee(_prevState: ActionResult | null, formData: 
           ...parsed.data,
           doj: parsed.data.doj.toISOString(),
           dob: parsed.data.dob ? parsed.data.dob.toISOString() : null,
-        },
+        } as unknown as Prisma.InputJsonValue,
       },
     });
 
@@ -78,7 +82,8 @@ export async function createEmployee(_prevState: ActionResult | null, formData: 
     return { ok: true, pending: true };
   }
 
-  const { basic, hra, conveyance, medicalAllowance, specialAllowance, ...employeeData } = parsed.data;
+  const { basic, hra, da, conveyance, medicalAllowance, specialAllowance, otherAllowances, ...employeeData } =
+    parsed.data;
 
   await db.employee.create({
     data: {
@@ -89,9 +94,11 @@ export async function createEmployee(_prevState: ActionResult | null, formData: 
           effectiveFrom: parsed.data.doj,
           basic,
           hra,
+          da,
           conveyance,
           medicalAllowance,
           specialAllowance,
+          otherAllowances: otherAllowances as unknown as Prisma.InputJsonValue,
         },
       },
     },
@@ -125,13 +132,23 @@ export async function updateSalaryStructure(
   }
 
   const parsed = employeeSchema
-    .pick({ basic: true, hra: true, conveyance: true, medicalAllowance: true, specialAllowance: true })
+    .pick({
+      basic: true,
+      hra: true,
+      da: true,
+      conveyance: true,
+      medicalAllowance: true,
+      specialAllowance: true,
+      otherAllowances: true,
+    })
     .safeParse({
       basic: formData.get("basic"),
       hra: formData.get("hra"),
+      da: formData.get("da"),
       conveyance: formData.get("conveyance"),
       medicalAllowance: formData.get("medicalAllowance"),
       specialAllowance: formData.get("specialAllowance"),
+      otherAllowances: formData.get("otherAllowancesJson"),
     });
 
   if (!parsed.success) {
@@ -144,7 +161,7 @@ export async function updateSalaryStructure(
         orgId: session.orgId,
         type: "UPDATE_SALARY",
         requestedById: session.userId,
-        payload: { employeeId, ...parsed.data },
+        payload: { employeeId, ...parsed.data } as unknown as Prisma.InputJsonValue,
       },
     });
 
@@ -153,8 +170,14 @@ export async function updateSalaryStructure(
     return { ok: true, pending: true };
   }
 
+  const { otherAllowances, ...salary } = parsed.data;
   await db.salaryStructure.create({
-    data: { employeeId, effectiveFrom: new Date(), ...parsed.data },
+    data: {
+      employeeId,
+      effectiveFrom: new Date(),
+      ...salary,
+      otherAllowances: otherAllowances as unknown as Prisma.InputJsonValue,
+    },
   });
 
   revalidatePath(`/employees/${employeeId}`);
@@ -220,6 +243,12 @@ export async function updateEmployeeDetails(
     employeeCategory: formData.get("employeeCategory"),
     ptApplicable: formData.get("ptApplicable"),
     dol: formData.get("dol"),
+    esiNumber: formData.get("esiNumber"),
+    mlwfIdNumber: formData.get("mlwfIdNumber"),
+    payMode: formData.get("payMode"),
+    shiftHoursPerDay: formData.get("shiftHoursPerDay"),
+    freeLeaveDaysPerMonth: formData.get("freeLeaveDaysPerMonth"),
+    excessLeaveDailyDeduction: formData.get("excessLeaveDailyDeduction"),
   });
 
   if (!parsed.success) {
@@ -266,7 +295,7 @@ export async function bulkUploadEmployees(
           orgId: session.orgId,
           type: "CREATE_EMPLOYEE" as const,
           requestedById: session.userId,
-          payload: { ...rest, doj: doj.toISOString(), dob: dob ? dob.toISOString() : null },
+          payload: { ...rest, doj: doj.toISOString(), dob: dob ? dob.toISOString() : null } as unknown as Prisma.InputJsonValue,
         };
       }),
     });
@@ -278,13 +307,23 @@ export async function bulkUploadEmployees(
 
   await db.$transaction(
     valid.map((row) => {
-      const { basic, hra, conveyance, medicalAllowance, specialAllowance, ...employeeData } = row;
+      const { basic, hra, da, conveyance, medicalAllowance, specialAllowance, otherAllowances, ...employeeData } =
+        row;
       return db.employee.create({
         data: {
           orgId: session.orgId,
           ...employeeData,
           salaryStructures: {
-            create: { effectiveFrom: row.doj, basic, hra, conveyance, medicalAllowance, specialAllowance },
+            create: {
+              effectiveFrom: row.doj,
+              basic,
+              hra,
+              da,
+              conveyance,
+              medicalAllowance,
+              specialAllowance,
+              otherAllowances: otherAllowances as unknown as Prisma.InputJsonValue,
+            },
           },
         },
       });

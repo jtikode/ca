@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { Card } from "@/components/ui/Card";
+import { PayrollCharts, type CostBreakdownSlice, type MonthlyTotal } from "@/components/dashboard/PayrollCharts";
+import { MONTH_NAMES } from "@/lib/dates";
 
 export default async function DashboardPage() {
   const session = await requireSession();
@@ -25,6 +27,48 @@ export default async function DashboardPage() {
         })
       : Promise.resolve([]),
   ]);
+
+  const [latestFinalizedRun, recentFinalizedRuns] = await Promise.all([
+    db.payrollRun.findFirst({
+      where: { orgId: session.orgId, status: "FINALIZED" },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+      include: { payslipLines: true },
+    }),
+    db.payrollRun.findMany({
+      where: { orgId: session.orgId, status: "FINALIZED" },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+      take: 12,
+      include: { payslipLines: { select: { netPay: true } } },
+    }),
+  ]);
+
+  let costBreakdown: CostBreakdownSlice[] = [];
+  if (latestFinalizedRun) {
+    const totals = latestFinalizedRun.payslipLines.reduce(
+      (acc, line) => ({
+        net: acc.net + Number(line.netPay),
+        employeePfEsi: acc.employeePfEsi + Number(line.pfEmployee) + Number(line.esiEmployee),
+        employerPfEsi: acc.employerPfEsi + Number(line.pfEmployer) + Number(line.esiEmployer),
+        pt: acc.pt + Number(line.ptAmount),
+        tds: acc.tds + Number(line.tdsAmount),
+      }),
+      { net: 0, employeePfEsi: 0, employerPfEsi: 0, pt: 0, tds: 0 },
+    );
+    costBreakdown = [
+      { name: "Net pay", value: totals.net },
+      { name: "Employee PF+ESI", value: totals.employeePfEsi },
+      { name: "Employer PF+ESI", value: totals.employerPfEsi },
+      { name: "PT", value: totals.pt },
+      { name: "TDS", value: totals.tds },
+    ].filter((s) => s.value > 0);
+  }
+
+  const monthlyTotals: MonthlyTotal[] = [...recentFinalizedRuns]
+    .reverse()
+    .map((run) => ({
+      label: `${MONTH_NAMES[run.month - 1].slice(0, 3)} ${run.year}`,
+      total: run.payslipLines.reduce((sum, l) => sum + Number(l.netPay), 0),
+    }));
 
   return (
     <div className="space-y-6">
@@ -64,6 +108,13 @@ export default async function DashboardPage() {
           </Card>
         )}
       </div>
+
+      {latestFinalizedRun && (
+        <Card>
+          <h2 className="mb-4 text-lg font-bold text-slate-900">Payroll trends</h2>
+          <PayrollCharts costBreakdown={costBreakdown} monthlyTotals={monthlyTotals} />
+        </Card>
+      )}
 
       {session.role === "HR_MANAGER" && myRequests.length > 0 && (
         <Card>

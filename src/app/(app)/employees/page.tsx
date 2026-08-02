@@ -67,6 +67,7 @@ export default async function EmployeesPage() {
                 ? grossFromEarnings({
                     basic: Number(latest.basic),
                     hra: Number(latest.hra),
+                    da: Number(latest.da),
                     conveyance: Number(latest.conveyance),
                     medicalAllowance: Number(latest.medicalAllowance),
                     specialAllowance: Number(latest.specialAllowance),

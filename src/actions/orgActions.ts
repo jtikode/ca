@@ -20,10 +20,21 @@ export async function updateOrganization(_prevState: ActionResult | null, formDa
   const esiRegistrationNo = (formData.get("esiRegistrationNo") as string) || null;
   const pfApplicable = formData.get("pfApplicable") === "on";
   const esiApplicable = formData.get("esiApplicable") === "on";
+  const payslipEmailEnabled = formData.get("payslipEmailEnabled") === "on";
 
   await db.organization.update({
     where: { id: session.orgId },
-    data: { legalName, address, pan, tan, pfRegistrationNo, esiRegistrationNo, pfApplicable, esiApplicable },
+    data: {
+      legalName,
+      address,
+      pan,
+      tan,
+      pfRegistrationNo,
+      esiRegistrationNo,
+      pfApplicable,
+      esiApplicable,
+      payslipEmailEnabled,
+    },
   });
 
   revalidatePath("/settings");

@@ -25,6 +25,26 @@ export const loginSchema = z.object({
 export const EMPLOYMENT_STAGES = ["PROBATION", "CONFIRMED"] as const;
 export const EMPLOYMENT_BASES = ["PERMANENT", "CONTRACT"] as const;
 export const EMPLOYEE_CATEGORIES = ["NON_MANAGERIAL", "MANAGERIAL"] as const;
+export const PAY_MODES = ["MONTHLY", "HOURLY_ATTENDANCE"] as const;
+
+export const otherAllowanceItemSchema = z.object({
+  name: z.string().min(1),
+  amount: z.coerce.number().nonnegative(),
+  basis: z.enum(["FIXED", "ATTENDANCE"]),
+});
+export const otherAllowancesSchema = z.array(otherAllowanceItemSchema).max(20);
+
+// The salary-structure form serializes its dynamic allowance rows to a
+// single hidden JSON field rather than reconstructing an indexed
+// multipart-array field name per row.
+const otherAllowancesFromJson = z.preprocess((v) => {
+  if (typeof v !== "string" || v.trim() === "") return [];
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v; // left as a string so the array schema below fails cleanly
+  }
+}, otherAllowancesSchema);
 
 export const employeeSchema = z.object({
   employeeCode: z.string().min(1, "Employee code is required."),
@@ -35,6 +55,7 @@ export const employeeSchema = z.object({
   pan: optionalString,
   uan: optionalString,
   esiNumber: optionalString,
+  mlwfIdNumber: optionalString,
   bankAccountNo: optionalString,
   bankIfsc: optionalString,
   state: z.string().min(1, "State is required."),
@@ -42,9 +63,11 @@ export const employeeSchema = z.object({
   esiApplicable: booleanFromCheckbox,
   basic: z.coerce.number().nonnegative(),
   hra: z.coerce.number().nonnegative(),
+  da: z.coerce.number().nonnegative().default(0),
   conveyance: z.coerce.number().nonnegative().default(0),
   medicalAllowance: z.coerce.number().nonnegative().default(0),
   specialAllowance: z.coerce.number().nonnegative().default(0),
+  otherAllowances: otherAllowancesFromJson.default([]),
   designation: optionalString,
   employmentStage: z.enum(EMPLOYMENT_STAGES).default("PROBATION"),
   employmentBasis: z.enum(EMPLOYMENT_BASES).default("PERMANENT"),
@@ -59,6 +82,31 @@ export const updateEmployeeDetailsSchema = z.object({
   employeeCategory: z.enum(EMPLOYEE_CATEGORIES),
   ptApplicable: booleanFromCheckbox,
   dol: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
+  esiNumber: optionalString,
+  mlwfIdNumber: optionalString,
+  payMode: z.enum(PAY_MODES).default("MONTHLY"),
+  shiftHoursPerDay: optionalNumber,
+  freeLeaveDaysPerMonth: z.preprocess(emptyToUndefined, z.coerce.number().int().nonnegative().optional()),
+  excessLeaveDailyDeduction: optionalNumber,
+});
+
+export const leavePolicySchema = z.object({
+  casualLeavePerYear: z.coerce.number().int().nonnegative(),
+  sickLeavePerYear: z.coerce.number().int().nonnegative(),
+  earnedLeavePerYear: z.coerce.number().int().nonnegative(),
+});
+
+const attendancePresentSchema = z.preprocess((v) => {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (["present", "p", "true", "1", "yes", "y"].includes(s)) return true;
+  if (["absent", "a", "false", "0", "no", "n"].includes(s)) return false;
+  return v; // left unrecognized so validation fails with a clear message
+}, z.boolean({ error: "Status must be Present or Absent." }));
+
+export const attendanceImportRowSchema = z.object({
+  employeeCode: z.string().min(1, "Employee code is required."),
+  date: z.coerce.date({ error: "A valid date is required." }),
+  present: attendancePresentSchema,
 });
 
 export const taxDeclarationSchema = z.object({

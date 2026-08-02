@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { assertSession } from "@/lib/permissions";
+import type { OtherAllowanceItem } from "@/lib/statutory";
+import type { Prisma } from "@/generated/prisma/client";
 
 export interface ActionResult {
   ok: boolean;
@@ -18,6 +20,7 @@ interface CreateEmployeePayload {
   pan?: string;
   uan?: string;
   esiNumber?: string;
+  mlwfIdNumber?: string;
   bankAccountNo?: string;
   bankIfsc?: string;
   state: string;
@@ -25,18 +28,22 @@ interface CreateEmployeePayload {
   esiApplicable: boolean;
   basic: number;
   hra: number;
+  da: number;
   conveyance: number;
   medicalAllowance: number;
   specialAllowance: number;
+  otherAllowances?: OtherAllowanceItem[];
 }
 
 interface UpdateSalaryPayload {
   employeeId: string;
   basic: number;
   hra: number;
+  da: number;
   conveyance: number;
   medicalAllowance: number;
   specialAllowance: number;
+  otherAllowances?: OtherAllowanceItem[];
 }
 
 // Applies the request's stored payload, then marks it approved — both inside
@@ -55,7 +62,8 @@ export async function approveRequest(requestId: string): Promise<ActionResult> {
   await db.$transaction(async (tx) => {
     if (request.type === "CREATE_EMPLOYEE") {
       const p = request.payload as unknown as CreateEmployeePayload;
-      const { basic, hra, conveyance, medicalAllowance, specialAllowance, doj, dob, ...rest } = p;
+      const { basic, hra, da, conveyance, medicalAllowance, specialAllowance, otherAllowances, doj, dob, ...rest } =
+        p;
 
       await tx.employee.create({
         data: {
@@ -64,16 +72,30 @@ export async function approveRequest(requestId: string): Promise<ActionResult> {
           doj: new Date(doj),
           dob: dob ? new Date(dob) : null,
           salaryStructures: {
-            create: { effectiveFrom: new Date(doj), basic, hra, conveyance, medicalAllowance, specialAllowance },
+            create: {
+              effectiveFrom: new Date(doj),
+              basic,
+              hra,
+              da,
+              conveyance,
+              medicalAllowance,
+              specialAllowance,
+              otherAllowances: otherAllowances as unknown as Prisma.InputJsonValue,
+            },
           },
         },
       });
     } else if (request.type === "UPDATE_SALARY") {
       const p = request.payload as unknown as UpdateSalaryPayload;
-      const { employeeId, ...salary } = p;
+      const { employeeId, otherAllowances, ...salary } = p;
 
       await tx.salaryStructure.create({
-        data: { employeeId, effectiveFrom: new Date(), ...salary },
+        data: {
+          employeeId,
+          effectiveFrom: new Date(),
+          ...salary,
+          otherAllowances: otherAllowances as unknown as Prisma.InputJsonValue,
+        },
       });
     }
 

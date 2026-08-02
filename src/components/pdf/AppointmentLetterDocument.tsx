@@ -19,6 +19,10 @@ export function AppointmentLetterDocument({
   esiApplicable,
   ptApplicable,
   leavePolicy,
+  pfEmployeeMonthly,
+  pfEmployerMonthly,
+  esiEmployeeMonthly,
+  esiEmployerMonthly,
 }: {
   orgName: string;
   orgAddress: string;
@@ -30,12 +34,27 @@ export function AppointmentLetterDocument({
   employmentStage: "PROBATION" | "CONFIRMED";
   probationEndDate: Date | null;
   employeeCategory: "MANAGERIAL" | "NON_MANAGERIAL";
-  earnings: { basic: number; hra: number; conveyance: number; medicalAllowance: number; specialAllowance: number };
+  earnings: {
+    basic: number;
+    hra: number;
+    da?: number;
+    conveyance: number;
+    medicalAllowance: number;
+    specialAllowance: number;
+    otherAllowances?: { name: string; amount: number; basis: "FIXED" | "ATTENDANCE" }[];
+  };
   grossMonthly: number;
   pfApplicable: boolean;
   esiApplicable: boolean;
   ptApplicable: boolean;
   leavePolicy: { casualLeavePerYear: number; sickLeavePerYear: number; earnedLeavePerYear: number } | null;
+  // Monthly rupee figures; annual (×12) is derived at render time. Always
+  // read-only, computed server-side from the same statutory.ts functions
+  // used in real payroll — never a separately-editable "print-only" number.
+  pfEmployeeMonthly: number;
+  pfEmployerMonthly: number;
+  esiEmployeeMonthly: number;
+  esiEmployerMonthly: number;
 }) {
   const totalLeave = leavePolicy
     ? leavePolicy.casualLeavePerYear + leavePolicy.sickLeavePerYear + leavePolicy.earnedLeavePerYear
@@ -92,6 +111,12 @@ export function AppointmentLetterDocument({
             <Text style={letterStyles.tableCellLabel}>HRA</Text>
             <Text style={letterStyles.tableCellValue}>{inr(earnings.hra)}</Text>
           </View>
+          {(earnings.da ?? 0) > 0 && (
+            <View style={letterStyles.tableRow}>
+              <Text style={letterStyles.tableCellLabel}>DA</Text>
+              <Text style={letterStyles.tableCellValue}>{inr(earnings.da ?? 0)}</Text>
+            </View>
+          )}
           <View style={letterStyles.tableRow}>
             <Text style={letterStyles.tableCellLabel}>Conveyance</Text>
             <Text style={letterStyles.tableCellValue}>{inr(earnings.conveyance)}</Text>
@@ -100,6 +125,12 @@ export function AppointmentLetterDocument({
             <Text style={letterStyles.tableCellLabel}>Special allowance</Text>
             <Text style={letterStyles.tableCellValue}>{inr(earnings.specialAllowance)}</Text>
           </View>
+          {(earnings.otherAllowances ?? []).map((item, i) => (
+            <View style={letterStyles.tableRow} key={`${item.name}-${i}`}>
+              <Text style={letterStyles.tableCellLabel}>{item.name}</Text>
+              <Text style={letterStyles.tableCellValue}>{inr(item.amount)}</Text>
+            </View>
+          ))}
           <View style={letterStyles.tableRow}>
             <Text style={[letterStyles.tableCellLabel, { fontWeight: 700 }]}>Gross (monthly)</Text>
             <Text style={[letterStyles.tableCellValue, { fontWeight: 700 }]}>{inr(grossMonthly)}</Text>
@@ -121,6 +152,47 @@ export function AppointmentLetterDocument({
             <Text style={letterStyles.value}>{ptApplicable ? "Applicable" : "Not applicable"}</Text>
           </View>
         </View>
+
+        {(pfApplicable || esiApplicable) && (
+          <>
+            <Text style={letterStyles.sectionTitle}>Statutory contributions (auto-calculated)</Text>
+            <View style={letterStyles.table}>
+              <View style={letterStyles.tableRow}>
+                <Text style={letterStyles.tableCellLabel} />
+                <Text style={[letterStyles.tableCellValue, { fontWeight: 700 }]}>Monthly</Text>
+                <Text style={[letterStyles.tableCellValue, { fontWeight: 700 }]}>Annual</Text>
+              </View>
+              {pfApplicable && (
+                <>
+                  <View style={letterStyles.tableRow}>
+                    <Text style={letterStyles.tableCellLabel}>PF (employee)</Text>
+                    <Text style={letterStyles.tableCellValue}>{inr(pfEmployeeMonthly)}</Text>
+                    <Text style={letterStyles.tableCellValue}>{inr(pfEmployeeMonthly * 12)}</Text>
+                  </View>
+                  <View style={letterStyles.tableRow}>
+                    <Text style={letterStyles.tableCellLabel}>PF (employer)</Text>
+                    <Text style={letterStyles.tableCellValue}>{inr(pfEmployerMonthly)}</Text>
+                    <Text style={letterStyles.tableCellValue}>{inr(pfEmployerMonthly * 12)}</Text>
+                  </View>
+                </>
+              )}
+              {esiApplicable && (
+                <>
+                  <View style={letterStyles.tableRow}>
+                    <Text style={letterStyles.tableCellLabel}>ESI (employee)</Text>
+                    <Text style={letterStyles.tableCellValue}>{inr(esiEmployeeMonthly)}</Text>
+                    <Text style={letterStyles.tableCellValue}>{inr(esiEmployeeMonthly * 12)}</Text>
+                  </View>
+                  <View style={letterStyles.tableRow}>
+                    <Text style={letterStyles.tableCellLabel}>ESI (employer)</Text>
+                    <Text style={letterStyles.tableCellValue}>{inr(esiEmployerMonthly)}</Text>
+                    <Text style={letterStyles.tableCellValue}>{inr(esiEmployerMonthly * 12)}</Text>
+                  </View>
+                </>
+              )}
+            </View>
+          </>
+        )}
 
         <Text style={letterStyles.sectionTitle}>Leave entitlement (indicative, per applicable state law)</Text>
         <View style={letterStyles.section}>
@@ -159,7 +231,10 @@ export function AppointmentLetterDocument({
           <Text style={{ marginTop: 28 }}>Authorized Signatory</Text>
         </View>
 
-        <DisclaimerFooter orgName={orgName} />
+        <DisclaimerFooter
+          orgName={orgName}
+          extraLine="Salary structure is subject to change from time to time as per applicable laws and change in laws after discussion with employee in writing."
+        />
       </Page>
     </Document>
   );

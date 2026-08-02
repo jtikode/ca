@@ -6,6 +6,7 @@ import {
   calculateAnnualTDS,
   grossFromEarnings,
   type EarningsBreakup,
+  type OtherAllowanceItem,
 } from "@/lib/statutory";
 import { daysInMonth, currentFinancialYear } from "@/lib/dates";
 import type { Prisma } from "@/generated/prisma/client";
@@ -26,7 +27,12 @@ export interface PayslipLineData {
   esiEmployer: number;
   ptAmount: number;
   tdsAmount: number;
+  attendanceDeduction: number;
   netPay: number;
+}
+
+function proratedOtherAllowances(items: OtherAllowanceItem[], ratio: number): OtherAllowanceItem[] {
+  return items.map((a) => (a.basis === "FIXED" ? a : { ...a, amount: Math.round(a.amount * ratio) }));
 }
 
 /** Computes one employee's payslip line for a given month/year and days paid.
@@ -53,30 +59,75 @@ export async function computePayslipLine(
   if (!employee || !structure) return null;
 
   const totalDays = daysInMonth(month, year);
-  const daysPaid = daysPaidOverride ?? totalDays;
-  const proration = daysPaid / totalDays;
 
   const fullEarnings: EarningsBreakup = {
     basic: Number(structure.basic),
     hra: Number(structure.hra),
+    da: Number(structure.da),
     conveyance: Number(structure.conveyance),
     medicalAllowance: Number(structure.medicalAllowance),
     specialAllowance: Number(structure.specialAllowance),
+    otherAllowances: (structure.otherAllowances as unknown as OtherAllowanceItem[] | null) ?? [],
   };
 
-  const proratedEarnings: EarningsBreakup = {
-    basic: Math.round(fullEarnings.basic * proration),
-    hra: Math.round(fullEarnings.hra * proration),
-    conveyance: Math.round(fullEarnings.conveyance * proration),
-    medicalAllowance: Math.round(fullEarnings.medicalAllowance * proration),
-    specialAllowance: Math.round(fullEarnings.specialAllowance * proration),
-  };
+  let daysPaid: number;
+  let proratedEarnings: EarningsBreakup;
+  let attendanceDeduction = 0;
+
+  // Manual daysPaid override (from updateDaysPaid) always forces the
+  // straight-line path below, even for HOURLY_ATTENDANCE employees — an
+  // explicit HR escape hatch.
+  const useAttendanceMode = employee.payMode === "HOURLY_ATTENDANCE" && daysPaidOverride === undefined;
+
+  if (useAttendanceMode) {
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEndExclusive = new Date(year, month, 1);
+    const daysPresent = await db.attendance.count({
+      where: { employeeId, present: true, date: { gte: monthStart, lt: monthEndExclusive } },
+    });
+    const daysAbsent = Math.max(0, totalDays - daysPresent);
+    const freeLeave = employee.freeLeaveDaysPerMonth ?? 0;
+    const excessDays = Math.max(0, daysAbsent - freeLeave);
+    const dailyRate = Number(employee.excessLeaveDailyDeduction ?? 0);
+    attendanceDeduction = Math.round(excessDays * dailyRate);
+
+    const basicPaid = Math.max(0, fullEarnings.basic - attendanceDeduction);
+    const attendanceRatio = totalDays > 0 ? daysPresent / totalDays : 0;
+
+    proratedEarnings = {
+      basic: basicPaid,
+      hra: fullEarnings.hra,
+      da: fullEarnings.da,
+      conveyance: fullEarnings.conveyance,
+      medicalAllowance: fullEarnings.medicalAllowance,
+      specialAllowance: fullEarnings.specialAllowance,
+      otherAllowances: proratedOtherAllowances(fullEarnings.otherAllowances!, attendanceRatio),
+    };
+    daysPaid = daysPresent;
+  } else {
+    daysPaid = daysPaidOverride ?? totalDays;
+    const proration = daysPaid / totalDays;
+    proratedEarnings = {
+      basic: Math.round(fullEarnings.basic * proration),
+      hra: Math.round(fullEarnings.hra * proration),
+      da: Math.round(fullEarnings.da * proration),
+      conveyance: Math.round(fullEarnings.conveyance * proration),
+      medicalAllowance: Math.round(fullEarnings.medicalAllowance * proration),
+      specialAllowance: Math.round(fullEarnings.specialAllowance * proration),
+      otherAllowances: proratedOtherAllowances(fullEarnings.otherAllowances!, proration),
+    };
+  }
+
+  // Used only to scale the annualized TDS estimate below — daysPaid is
+  // daysPresent in attendance mode, the override or full days otherwise.
+  const proration = totalDays > 0 ? daysPaid / totalDays : 0;
 
   const grossEarnings = grossFromEarnings(proratedEarnings);
   const fullGross = grossFromEarnings(fullEarnings);
 
-  const pf = calculatePF(proratedEarnings.basic, org.pfApplicable && employee.pfApplicable);
-  const esi = calculateESI(grossEarnings, org.esiApplicable && employee.esiApplicable);
+  const basicPlusDa = proratedEarnings.basic + proratedEarnings.da;
+  const pf = calculatePF(basicPlusDa, org.pfApplicable && employee.pfApplicable);
+  const esi = calculateESI(grossEarnings, basicPlusDa, org.esiApplicable && employee.esiApplicable);
   const ptAmount = employee.ptApplicable
     ? await calculatePT(employee.state, grossEarnings, new Date(year, month - 1, 1))
     : 0;
@@ -107,7 +158,7 @@ export async function computePayslipLine(
     employeeId,
     daysInMonth: totalDays,
     daysPaid,
-    earnings: { ...proratedEarnings },
+    earnings: { ...proratedEarnings } as unknown as Prisma.InputJsonValue,
     grossEarnings,
     pfWages: pf.pfWages,
     pfEmployee: pf.pfEmployee,
@@ -119,6 +170,7 @@ export async function computePayslipLine(
     esiEmployer: esi.esiEmployer,
     ptAmount,
     tdsAmount,
+    attendanceDeduction,
     netPay,
   };
 }

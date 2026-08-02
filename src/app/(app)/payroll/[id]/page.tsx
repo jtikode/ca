@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { DaysPaidCell } from "@/components/payroll/DaysPaidCell";
+import { EmailPayslipButton } from "@/components/payroll/EmailPayslipButton";
 import { finalizePayrollRun, deleteDraftPayrollRun } from "@/actions/payrollActions";
 import { MONTH_NAMES } from "@/lib/dates";
 
@@ -29,6 +30,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
   if (!run) notFound();
 
   const isDraft = run.status === "DRAFT";
+  const hasAttendanceDeduction = run.payslipLines.some((line) => Number(line.attendanceDeduction) > 0);
 
   const totals = run.payslipLines.reduce(
     (acc, line) => ({
@@ -38,8 +40,9 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
       pt: acc.pt + Number(line.ptAmount),
       tds: acc.tds + Number(line.tdsAmount),
       net: acc.net + Number(line.netPay),
+      attendanceDeduction: acc.attendanceDeduction + Number(line.attendanceDeduction),
     }),
-    { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0 },
+    { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0, attendanceDeduction: 0 },
   );
 
   return (
@@ -86,6 +89,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
             <tr className="border-b border-slate-200 text-slate-500">
               <th className="py-2 pr-4">Employee</th>
               <th className="py-2 pr-4">Days paid</th>
+              {hasAttendanceDeduction && <th className="py-2 pr-4">Attendance deduction</th>}
               <th className="py-2 pr-4">Gross</th>
               <th className="py-2 pr-4">PF (emp.)</th>
               <th className="py-2 pr-4">ESI (emp.)</th>
@@ -108,6 +112,11 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
                     editable={isDraft}
                   />
                 </td>
+                {hasAttendanceDeduction && (
+                  <td className="py-2 pr-4">
+                    {Number(line.attendanceDeduction) > 0 ? `-${inr(Number(line.attendanceDeduction))}` : "—"}
+                  </td>
+                )}
                 <td className="py-2 pr-4">{inr(Number(line.grossEarnings))}</td>
                 <td className="py-2 pr-4">{inr(Number(line.pfEmployee))}</td>
                 <td className="py-2 pr-4">{inr(Number(line.esiEmployee))}</td>
@@ -116,19 +125,22 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
                 <td className="py-2 pr-4 font-semibold text-slate-900">{inr(Number(line.netPay))}</td>
                 {!isDraft && (
                   <td className="py-2 pr-4">
-                    <a
-                      href={`/api/payroll/${run.id}/payslip/${line.employeeId}`}
-                      className="text-sm font-semibold text-blue-700 hover:underline"
-                    >
-                      Payslip
-                    </a>
+                    <div className="flex flex-col items-start gap-1">
+                      <a
+                        href={`/api/payroll/${run.id}/payslip/${line.employeeId}`}
+                        className="text-sm font-semibold text-blue-700 hover:underline"
+                      >
+                        Payslip
+                      </a>
+                      <EmailPayslipButton payrollRunId={run.id} employeeId={line.employeeId} />
+                    </div>
                   </td>
                 )}
               </tr>
             ))}
             {run.payslipLines.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-4 text-center text-slate-400">
+                <td colSpan={hasAttendanceDeduction ? 9 : 8} className="py-4 text-center text-slate-400">
                   No active employees to pay.
                 </td>
               </tr>
@@ -139,6 +151,11 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
               <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
                 <td className="py-2 pr-4">Total</td>
                 <td className="py-2 pr-4"></td>
+                {hasAttendanceDeduction && (
+                  <td className="py-2 pr-4">
+                    {totals.attendanceDeduction > 0 ? `-${inr(totals.attendanceDeduction)}` : "—"}
+                  </td>
+                )}
                 <td className="py-2 pr-4">{inr(totals.gross)}</td>
                 <td className="py-2 pr-4">{inr(totals.pf)}</td>
                 <td className="py-2 pr-4">{inr(totals.esi)}</td>

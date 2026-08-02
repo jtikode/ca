@@ -51,6 +51,12 @@ export function EmployeeForm() {
       <Field label="Bank IFSC">
         <Input name="bankIfsc" />
       </Field>
+      <Field label="ESIC IP Number">
+        <Input name="esiNumber" />
+      </Field>
+      <Field label="MLWF Labour ID Number">
+        <Input name="mlwfIdNumber" />
+      </Field>
       <Field label="Designation">
         <Input name="designation" placeholder="e.g. Sales Executive" />
       </Field>
@@ -87,6 +93,9 @@ export function EmployeeForm() {
       </Field>
       <Field label="HRA (monthly)">
         <Input name="hra" type="number" min="0" step="1" required />
+      </Field>
+      <Field label="DA (monthly)">
+        <Input name="da" type="number" min="0" step="1" defaultValue={0} />
       </Field>
       <Field label="Conveyance (monthly)">
         <Input name="conveyance" type="number" min="0" step="1" defaultValue={0} />

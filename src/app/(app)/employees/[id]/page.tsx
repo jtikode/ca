@@ -35,7 +35,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
     db.approvalRequest.findMany({
       where: { orgId: session.orgId, type: "UPDATE_SALARY", status: "PENDING" },
     }),
-    db.leavePolicy.findUnique({ where: { state: employee.state } }),
+    db.leavePolicy.findUnique({ where: { orgId: session.orgId } }),
   ]);
   const hasPendingSalaryRequest = pendingSalaryRequests.some(
     (req) => (req.payload as { employeeId?: string }).employeeId === id,
@@ -82,6 +82,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         </p>
         <EmployeeDetailsForm
           employeeId={employee.id}
+          basic={latest ? Number(latest.basic) : 0}
           defaults={{
             designation: employee.designation ?? "",
             employmentStage: employee.employmentStage,
@@ -90,6 +91,14 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
             employeeCategory: employee.employeeCategory,
             ptApplicable: employee.ptApplicable,
             dol: employee.dol,
+            esiNumber: employee.esiNumber ?? "",
+            mlwfIdNumber: employee.mlwfIdNumber ?? "",
+            payMode: employee.payMode,
+            shiftHoursPerDay: employee.shiftHoursPerDay ? Number(employee.shiftHoursPerDay) : null,
+            freeLeaveDaysPerMonth: employee.freeLeaveDaysPerMonth,
+            excessLeaveDailyDeduction: employee.excessLeaveDailyDeduction
+              ? Number(employee.excessLeaveDailyDeduction)
+              : null,
           }}
         />
       </Card>
@@ -111,9 +120,13 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
             defaults={{
               basic: Number(latest.basic),
               hra: Number(latest.hra),
+              da: Number(latest.da),
               conveyance: Number(latest.conveyance),
               medicalAllowance: Number(latest.medicalAllowance),
               specialAllowance: Number(latest.specialAllowance),
+              otherAllowances:
+                (latest.otherAllowances as unknown as { name: string; amount: number; basis: "FIXED" | "ATTENDANCE" }[] | null) ??
+                [],
             }}
           />
         )}
@@ -144,8 +157,8 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         <Card>
           <h2 className="mb-1 text-lg font-bold text-slate-900">Leave entitlement</h2>
           <p className="mb-4 text-sm text-slate-500">
-            Indicative, per {employee.state}&apos;s Shops &amp; Establishments Act — an annual entitlement, not a
-            running balance (leave taken isn&apos;t tracked yet). Verify against the current Act before relying on it.
+            Your company&apos;s leave policy (editable in Settings) — an annual entitlement, not a running balance
+            (leave taken isn&apos;t tracked yet).
           </p>
           {leavePolicy ? (
             <div className="space-y-1 text-sm">
@@ -174,8 +187,8 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         <Card>
           <h2 className="mb-1 text-lg font-bold text-slate-900">Gratuity</h2>
           <p className="mb-4 text-sm text-slate-500">
-            Payment of Gratuity Act, 1972 — computed on Basic only (no DA tracked). Payable after 5 years of
-            continuous service.
+            Payment of Gratuity Act, 1972 — computed on Basic only (a known simplification; the Act technically
+            includes DA too). Payable after 5 years of continuous service.
           </p>
           {gratuity ? (
             <div className="space-y-1 text-sm">

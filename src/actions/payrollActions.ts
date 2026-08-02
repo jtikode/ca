@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { assertSession } from "@/lib/permissions";
 import { payrollRunInputSchema } from "@/lib/validators";
 import { computePayslipLine } from "@/lib/payrollEngine";
+import { sendPayslipEmailInternal } from "@/actions/payslipEmailActions";
 
 export interface ActionResult {
   ok: boolean;
@@ -94,6 +95,22 @@ export async function finalizePayrollRun(payrollRunId: string): Promise<void> {
     where: { id: payrollRunId },
     data: { status: "FINALIZED", finalizedAt: new Date() },
   });
+
+  const org = await db.organization.findUniqueOrThrow({ where: { id: session.orgId } });
+  if (org.payslipEmailEnabled) {
+    const lines = await db.payslipLine.findMany({
+      where: { payrollRunId },
+      include: { employee: true },
+    });
+    for (const line of lines) {
+      if (!line.employee.email) continue;
+      try {
+        await sendPayslipEmailInternal(payrollRunId, line.employeeId, session.orgId);
+      } catch (err) {
+        console.error(`Failed to email payslip to ${line.employee.email}`, err);
+      }
+    }
+  }
 
   revalidatePath(`/payroll/${payrollRunId}`);
   revalidatePath("/payroll");

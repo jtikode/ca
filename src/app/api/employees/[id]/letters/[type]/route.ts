@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { requireSession } from "@/lib/permissions";
 import { db } from "@/lib/db";
-import { grossFromEarnings } from "@/lib/statutory";
+import { grossFromEarnings, calculatePF, calculateESI, type OtherAllowanceItem } from "@/lib/statutory";
 import { OfferLetterDocument } from "@/components/pdf/OfferLetterDocument";
 import { AppointmentLetterDocument } from "@/components/pdf/AppointmentLetterDocument";
 import { ExperienceLetterDocument } from "@/components/pdf/ExperienceLetterDocument";
@@ -47,11 +47,13 @@ export async function GET(
       ? {
           basic: Number(structure.basic),
           hra: Number(structure.hra),
+          da: Number(structure.da),
           conveyance: Number(structure.conveyance),
           medicalAllowance: Number(structure.medicalAllowance),
           specialAllowance: Number(structure.specialAllowance),
+          otherAllowances: (structure.otherAllowances as unknown as OtherAllowanceItem[] | null) ?? [],
         }
-      : { basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0 };
+      : { basic: 0, hra: 0, da: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0, otherAllowances: [] };
     const ctcAnnual = grossFromEarnings(earnings) * 12;
 
     buffer = await renderToBuffer(
@@ -71,13 +73,21 @@ export async function GET(
       ? {
           basic: Number(structure.basic),
           hra: Number(structure.hra),
+          da: Number(structure.da),
           conveyance: Number(structure.conveyance),
           medicalAllowance: Number(structure.medicalAllowance),
           specialAllowance: Number(structure.specialAllowance),
+          otherAllowances: (structure.otherAllowances as unknown as OtherAllowanceItem[] | null) ?? [],
         }
-      : { basic: 0, hra: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0 };
+      : { basic: 0, hra: 0, da: 0, conveyance: 0, medicalAllowance: 0, specialAllowance: 0, otherAllowances: [] };
     const grossMonthly = grossFromEarnings(earnings);
-    const leavePolicy = await db.leavePolicy.findUnique({ where: { state: employee.state } });
+    const leavePolicy = await db.leavePolicy.findUnique({ where: { orgId: session.orgId } });
+
+    const pfApplicable = org.pfApplicable && employee.pfApplicable;
+    const esiApplicable = org.esiApplicable && employee.esiApplicable;
+    const basicPlusDa = earnings.basic + earnings.da;
+    const pf = calculatePF(basicPlusDa, pfApplicable);
+    const esi = calculateESI(grossMonthly, basicPlusDa, esiApplicable);
 
     buffer = await renderToBuffer(
       AppointmentLetterDocument({
@@ -93,8 +103,8 @@ export async function GET(
         employeeCategory: employee.employeeCategory,
         earnings,
         grossMonthly,
-        pfApplicable: org.pfApplicable && employee.pfApplicable,
-        esiApplicable: org.esiApplicable && employee.esiApplicable,
+        pfApplicable,
+        esiApplicable,
         ptApplicable: employee.ptApplicable,
         leavePolicy: leavePolicy
           ? {
@@ -103,6 +113,10 @@ export async function GET(
               earnedLeavePerYear: leavePolicy.earnedLeavePerYear,
             }
           : null,
+        pfEmployeeMonthly: pf.pfEmployee,
+        pfEmployerMonthly: pf.pfEmployer,
+        esiEmployeeMonthly: esi.esiEmployee,
+        esiEmployerMonthly: esi.esiEmployer,
       }),
     );
   } else if (type === "experience") {
