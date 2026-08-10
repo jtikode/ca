@@ -6,7 +6,7 @@ export default function SignupPage() {
   return (
     <div className="flex flex-1 items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-4">
-        <h1 className="text-center text-2xl font-bold text-slate-900">Payroll</h1>
+        <h1 className="text-center text-2xl font-bold text-slate-900">TimHr</h1>
         <Card>
           <h2 className="mb-4 text-lg font-bold text-slate-900">Create your company account</h2>
           <SignupForm />

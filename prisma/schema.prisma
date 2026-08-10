@@ -60,6 +60,12 @@ enum EmployeeCategory {
 enum PayMode {
   MONTHLY
   HOURLY_ATTENDANCE
+  WAGE_BASED
+}
+
+enum WageRateType {
+  HOURLY
+  DAILY
 }
 
 // One row per SMB customer of this SaaS. Every other business record is
@@ -174,15 +180,19 @@ model Employee {
   employmentBasis  EmploymentBasis  @default(PERMANENT)
   employeeCategory EmployeeCategory @default(NON_MANAGERIAL)
   // MONTHLY = standard calendar-proration pay (existing behavior).
-  // HOURLY_ATTENDANCE = paid via Attendance-derived days-present, with a
-  // free-leave allowance before excessLeaveDailyDeduction kicks in on Basic
-  // only — see src/lib/payrollEngine.ts.
+  // HOURLY_ATTENDANCE = still a monthly Basic, but with a free-leave
+  // allowance before excessLeaveDailyDeduction kicks in on Basic only.
+  // WAGE_BASED = no fixed monthly salary at all — gross pay each run is
+  // wageRate × (hours or days actually worked, from Attendance), per
+  // wageRateType. See src/lib/payrollEngine.ts.
   payMode                   PayMode  @default(MONTHLY)
   shiftHoursPerDay          Decimal?
   freeLeaveDaysPerMonth     Int?
   // Rupee deduction from Basic per day of absence beyond freeLeaveDaysPerMonth.
   // UI suggests basic÷daysInMonth as a default; HR can override per employee.
   excessLeaveDailyDeduction Decimal?
+  wageRateType              WageRateType?
+  wageRate                  Decimal?
   createdAt        DateTime         @default(now())
 
   organization     Organization      @relation(fields: [orgId], references: [id])
@@ -349,6 +359,10 @@ model Attendance {
   employeeId String
   date       DateTime
   present    Boolean
+  // Only populated/used for WAGE_BASED employees on HOURLY rate type — null
+  // for everyone else (present/absent alone is enough for HOURLY_ATTENDANCE
+  // and for DAILY-rate wage employees).
+  hoursWorked Decimal?
   createdAt  DateTime @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id])

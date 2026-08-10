@@ -46,8 +46,14 @@ export async function uploadAttendance(
     valid.map((row) =>
       db.attendance.upsert({
         where: { employeeId_date: { employeeId: row.employeeId, date: row.date } },
-        create: { orgId: session.orgId, employeeId: row.employeeId, date: row.date, present: row.present },
-        update: { present: row.present },
+        create: {
+          orgId: session.orgId,
+          employeeId: row.employeeId,
+          date: row.date,
+          present: row.present,
+          hoursWorked: row.hoursWorked ?? null,
+        },
+        update: { present: row.present, hoursWorked: row.hoursWorked ?? null },
       }),
     ),
   );

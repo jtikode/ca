@@ -3,11 +3,11 @@ import { db } from "@/lib/db";
 import { attendanceImportRowSchema } from "@/lib/validators";
 import { daysInMonth as daysInMonthOf } from "@/lib/dates";
 
-const TEMPLATE_COLUMNS = ["employeeCode", "date", "status", "timeIn", "timeOut"] as const;
+const TEMPLATE_COLUMNS = ["employeeCode", "date", "status", "timeIn", "timeOut", "hoursWorked"] as const;
 
 const EXAMPLE_ROWS: Record<(typeof TEMPLATE_COLUMNS)[number], string>[] = [
-  { employeeCode: "E101", date: "2026-04-01", status: "Present", timeIn: "09:00", timeOut: "14:00" },
-  { employeeCode: "E101", date: "2026-04-02", status: "Absent", timeIn: "", timeOut: "" },
+  { employeeCode: "E101", date: "2026-04-01", status: "Present", timeIn: "09:00", timeOut: "14:00", hoursWorked: "5" },
+  { employeeCode: "E101", date: "2026-04-02", status: "Absent", timeIn: "", timeOut: "", hoursWorked: "" },
 ];
 
 export function buildAttendanceTemplateWorkbook(): Buffer {
@@ -27,11 +27,13 @@ export interface ParsedAttendanceRow {
   employeeId: string;
   date: Date;
   present: boolean;
+  hoursWorked?: number;
 }
 
 // One row per employee per day. timeIn/timeOut columns are accepted in the
-// template for future use but not parsed into any column yet — only
-// present/absent drives the payroll calculation today.
+// template for future use but not parsed into any column yet. hoursWorked
+// is only meaningful (and only used) for WAGE_BASED employees on HOURLY
+// rate type — leave it blank for everyone else.
 export async function parseAttendanceImport(
   buffer: Buffer,
   orgId: string,
@@ -83,7 +85,12 @@ export async function parseAttendanceImport(
     }
     seenKeys.add(key);
 
-    valid.push({ employeeId, date: parsed.data.date, present: parsed.data.present });
+    valid.push({
+      employeeId,
+      date: parsed.data.date,
+      present: parsed.data.present,
+      hoursWorked: parsed.data.hoursWorked,
+    });
   });
 
   return { valid, errors };

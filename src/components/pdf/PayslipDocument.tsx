@@ -40,6 +40,7 @@ export function PayslipDocument({
   daysPaid,
   daysInMonth,
   attendanceDeduction = 0,
+  wageDetail,
 }: {
   orgName: string;
   employeeName: string;
@@ -64,8 +65,10 @@ export function PayslipDocument({
   daysPaid: number;
   daysInMonth: number;
   attendanceDeduction?: number;
+  wageDetail?: { rateType: "HOURLY" | "DAILY"; rate: number; unitsWorked: number };
 }) {
   const totalDeductions = pfEmployee + esiEmployee + ptAmount + tdsAmount;
+  const unitLabel = wageDetail?.rateType === "HOURLY" ? "hours" : "days";
 
   return (
     <Document>
@@ -95,7 +98,11 @@ export function PayslipDocument({
         <Text style={{ fontWeight: 700, marginBottom: 4 }}>Earnings</Text>
         <View style={styles.table}>
           <View style={styles.tableRow}>
-            <Text style={styles.tableCellLabel}>Basic</Text>
+            <Text style={styles.tableCellLabel}>
+              {wageDetail
+                ? `Wages — ${wageDetail.unitsWorked} ${unitLabel} × ${inr(wageDetail.rate)}`
+                : "Basic"}
+            </Text>
             <Text style={styles.tableCellValue}>{inr(earnings.basic)}</Text>
           </View>
           {attendanceDeduction > 0 && (
@@ -104,24 +111,28 @@ export function PayslipDocument({
               <Text style={styles.tableCellValue}>-{inr(attendanceDeduction)}</Text>
             </View>
           )}
-          <View style={styles.tableRow}>
-            <Text style={styles.tableCellLabel}>HRA</Text>
-            <Text style={styles.tableCellValue}>{inr(earnings.hra)}</Text>
-          </View>
-          {(earnings.da ?? 0) > 0 && (
-            <View style={styles.tableRow}>
-              <Text style={styles.tableCellLabel}>DA</Text>
-              <Text style={styles.tableCellValue}>{inr(earnings.da ?? 0)}</Text>
-            </View>
+          {!wageDetail && (
+            <>
+              <View style={styles.tableRow}>
+                <Text style={styles.tableCellLabel}>HRA</Text>
+                <Text style={styles.tableCellValue}>{inr(earnings.hra)}</Text>
+              </View>
+              {(earnings.da ?? 0) > 0 && (
+                <View style={styles.tableRow}>
+                  <Text style={styles.tableCellLabel}>DA</Text>
+                  <Text style={styles.tableCellValue}>{inr(earnings.da ?? 0)}</Text>
+                </View>
+              )}
+              <View style={styles.tableRow}>
+                <Text style={styles.tableCellLabel}>Conveyance</Text>
+                <Text style={styles.tableCellValue}>{inr(earnings.conveyance)}</Text>
+              </View>
+              <View style={styles.tableRow}>
+                <Text style={styles.tableCellLabel}>Special allowance</Text>
+                <Text style={styles.tableCellValue}>{inr(earnings.specialAllowance)}</Text>
+              </View>
+            </>
           )}
-          <View style={styles.tableRow}>
-            <Text style={styles.tableCellLabel}>Conveyance</Text>
-            <Text style={styles.tableCellValue}>{inr(earnings.conveyance)}</Text>
-          </View>
-          <View style={styles.tableRow}>
-            <Text style={styles.tableCellLabel}>Special allowance</Text>
-            <Text style={styles.tableCellValue}>{inr(earnings.specialAllowance)}</Text>
-          </View>
           {(earnings.otherAllowances ?? []).map((item, i) => (
             <View style={styles.tableRow} key={`${item.name}-${i}`}>
               <Text style={styles.tableCellLabel}>

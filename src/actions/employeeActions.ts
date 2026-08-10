@@ -249,6 +249,10 @@ export async function updateEmployeeDetails(
     shiftHoursPerDay: formData.get("shiftHoursPerDay"),
     freeLeaveDaysPerMonth: formData.get("freeLeaveDaysPerMonth"),
     excessLeaveDailyDeduction: formData.get("excessLeaveDailyDeduction"),
+    wageRateType: formData.get("wageRateType"),
+    wageRate: formData.get("wageRate"),
+    pfApplicable: formData.get("pfApplicable"),
+    esiApplicable: formData.get("esiApplicable"),
   });
 
   if (!parsed.success) {

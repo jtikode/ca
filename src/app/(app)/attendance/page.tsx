@@ -15,7 +15,7 @@ export default async function AttendancePage() {
   const monthEndExclusive = new Date(year, month, 1);
 
   const hourlyEmployees = await db.employee.findMany({
-    where: { orgId: session.orgId, status: "ACTIVE", payMode: "HOURLY_ATTENDANCE" },
+    where: { orgId: session.orgId, status: "ACTIVE", payMode: { in: ["HOURLY_ATTENDANCE", "WAGE_BASED"] } },
     orderBy: { name: "asc" },
   });
 
@@ -49,7 +49,7 @@ export default async function AttendancePage() {
       {hourlyEmployees.length > 0 && (
         <Card className="overflow-x-auto">
           <h2 className="mb-1 text-lg font-bold text-slate-900">
-            Hourly/attendance-based employees — {MONTH_NAMES[month - 1]} {year}
+            Hourly/attendance-based &amp; wage-based employees — {MONTH_NAMES[month - 1]} {year}
           </h2>
           <p className="mb-4 text-sm text-slate-500">
             Days present so far this month, out of {totalDays}. A short row count usually means the upload for this

@@ -90,6 +90,8 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
             employmentBasis: employee.employmentBasis,
             employeeCategory: employee.employeeCategory,
             ptApplicable: employee.ptApplicable,
+            pfApplicable: employee.pfApplicable,
+            esiApplicable: employee.esiApplicable,
             dol: employee.dol,
             esiNumber: employee.esiNumber ?? "",
             mlwfIdNumber: employee.mlwfIdNumber ?? "",
@@ -99,6 +101,8 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
             excessLeaveDailyDeduction: employee.excessLeaveDailyDeduction
               ? Number(employee.excessLeaveDailyDeduction)
               : null,
+            wageRateType: employee.wageRateType,
+            wageRate: employee.wageRate ? Number(employee.wageRate) : null,
           }}
         />
       </Card>

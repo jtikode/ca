@@ -12,6 +12,7 @@ const LINKS: Record<UserRole, { href: string; label: string }[]> = {
     { href: "/employees", label: "Employees" },
     { href: "/payroll", label: "Payroll" },
     { href: "/attendance", label: "Attendance" },
+    { href: "/reports", label: "Reports" },
     { href: "/approvals", label: "Approvals" },
     { href: "/team", label: "Team" },
     { href: "/settings", label: "Settings" },
@@ -21,6 +22,7 @@ const LINKS: Record<UserRole, { href: string; label: string }[]> = {
     { href: "/employees", label: "Employees" },
     { href: "/payroll", label: "Payroll" },
     { href: "/attendance", label: "Attendance" },
+    { href: "/reports", label: "Reports" },
     { href: "/settings", label: "Settings" },
   ],
   EMPLOYEE: [{ href: "/my-payslips", label: "My Payslips" }],
@@ -42,7 +44,11 @@ export function AppNav({
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-6">
-          <span className="font-bold text-slate-900">{orgName}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-blue-700">TimHr</span>
+            <span className="text-slate-300">|</span>
+            <span className="font-semibold text-slate-900">{orgName}</span>
+          </div>
           <nav className="flex items-center gap-4">
             {links.map((link) => (
               <Link

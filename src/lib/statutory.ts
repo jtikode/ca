@@ -180,15 +180,39 @@ export interface TDSInput {
   otherIncome: number;
 }
 
-/** Annualized estimate for the CA to review — not a Form 24Q filing figure.
- * HRA exemption assumes a metro rate (50% of basic) as a simplification. */
-export async function calculateAnnualTDS(input: TDSInput): Promise<number> {
-  const stdDeduction = STANDARD_DEDUCTION[input.regime];
+export interface TaxComputationResult {
+  standardDeduction: number;
+  hraExemption: number;
+  section80CApplied: number;
+  section80DApplied: number;
+  homeLoanInterestApplied: number;
+  grossTotalIncome: number;
+  taxableIncome: number;
+  taxBeforeRebate: number;
+  rebateApplied: number;
+  taxAfterRebate: number;
+  cess: number;
+  totalTax: number;
+}
 
-  let taxableIncome = input.annualGross + input.otherIncome - stdDeduction;
+/** Shared slab-wise tax computation, used both by the per-run TDS estimator
+ * (calculateAnnualTDS, annualized from the current month's figures) and by
+ * Form 16 Part B (actual full-year figures) — the deduction/exemption SHAPE
+ * must stay identical between the two call sites; only the input figures
+ * differ. HRA exemption assumes a metro rate (50% of basic) as a
+ * simplification. */
+export async function computeTaxableIncomeAndTax(input: TDSInput): Promise<TaxComputationResult> {
+  const standardDeduction = STANDARD_DEDUCTION[input.regime];
+  const grossTotalIncome = round(input.annualGross + input.otherIncome - standardDeduction);
+
+  let hraExemption = 0;
+  let section80CApplied = 0;
+  let section80DApplied = 0;
+  let homeLoanInterestApplied = 0;
+  let taxableIncome = grossTotalIncome;
 
   if (input.regime === "OLD") {
-    const hraExemption = Math.max(
+    hraExemption = Math.max(
       0,
       Math.min(
         input.hraAnnual,
@@ -196,11 +220,11 @@ export async function calculateAnnualTDS(input: TDSInput): Promise<number> {
         0.5 * input.basicAnnual,
       ),
     );
-    const cappedSection80C = Math.min(input.section80C, 150_000);
-    const cappedHomeLoanInterest = Math.min(input.homeLoanInterest, 200_000);
+    section80CApplied = Math.min(input.section80C, 150_000);
+    section80DApplied = input.section80D;
+    homeLoanInterestApplied = Math.min(input.homeLoanInterest, 200_000);
 
-    taxableIncome -=
-      hraExemption + cappedSection80C + input.section80D + cappedHomeLoanInterest;
+    taxableIncome -= hraExemption + section80CApplied + section80DApplied + homeLoanInterestApplied;
   }
 
   taxableIncome = Math.max(0, round(taxableIncome));
@@ -210,20 +234,44 @@ export async function calculateAnnualTDS(input: TDSInput): Promise<number> {
     orderBy: { minIncome: "asc" },
   });
 
-  let tax = 0;
+  let taxBeforeRebate = 0;
   for (const slab of slabs) {
     const min = Number(slab.minIncome);
     const max = slab.maxIncome ? Number(slab.maxIncome) : Infinity;
     if (taxableIncome <= min) continue;
     const slabAmount = Math.min(taxableIncome, max) - min;
-    tax += slabAmount * Number(slab.rate);
+    taxBeforeRebate += slabAmount * Number(slab.rate);
   }
 
   const rebate = REBATE_87A[input.regime];
+  let rebateApplied = 0;
+  let taxAfterRebate = taxBeforeRebate;
   if (taxableIncome <= rebate.incomeLimit) {
-    tax = Math.max(0, tax - rebate.maxRebate);
+    rebateApplied = Math.min(rebate.maxRebate, taxBeforeRebate);
+    taxAfterRebate = Math.max(0, taxBeforeRebate - rebateApplied);
   }
 
-  const totalTax = tax * (1 + CESS_RATE);
-  return round(totalTax);
+  const cess = round(taxAfterRebate * CESS_RATE);
+  const totalTax = round(taxAfterRebate + cess);
+
+  return {
+    standardDeduction,
+    hraExemption: round(hraExemption),
+    section80CApplied: round(section80CApplied),
+    section80DApplied: round(section80DApplied),
+    homeLoanInterestApplied: round(homeLoanInterestApplied),
+    grossTotalIncome,
+    taxableIncome,
+    taxBeforeRebate: round(taxBeforeRebate),
+    rebateApplied: round(rebateApplied),
+    taxAfterRebate: round(taxAfterRebate),
+    cess,
+    totalTax,
+  };
+}
+
+/** Annualized estimate for the CA to review — not a Form 24Q filing figure. */
+export async function calculateAnnualTDS(input: TDSInput): Promise<number> {
+  const result = await computeTaxableIncomeAndTax(input);
+  return result.totalTax;
 }

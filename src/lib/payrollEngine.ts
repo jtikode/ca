@@ -73,13 +73,45 @@ export async function computePayslipLine(
   let daysPaid: number;
   let proratedEarnings: EarningsBreakup;
   let attendanceDeduction = 0;
+  let wageDetail: { rateType: "HOURLY" | "DAILY"; rate: number; unitsWorked: number } | undefined;
+  // For WAGE_BASED employees there's no fixed monthly salary to annualize —
+  // this month's actual computed wage stands in for "fullGross" in the TDS
+  // extrapolation below, same spirit as MONTHLY employees extrapolating
+  // fullGross*12 from their fixed structure.
+  let wageBasedFullGrossOverride: number | undefined;
 
   // Manual daysPaid override (from updateDaysPaid) always forces the
-  // straight-line path below, even for HOURLY_ATTENDANCE employees — an
-  // explicit HR escape hatch.
+  // straight-line path below, even for HOURLY_ATTENDANCE/WAGE_BASED
+  // employees — an explicit HR escape hatch.
   const useAttendanceMode = employee.payMode === "HOURLY_ATTENDANCE" && daysPaidOverride === undefined;
+  const useWageMode = employee.payMode === "WAGE_BASED" && daysPaidOverride === undefined;
 
-  if (useAttendanceMode) {
+  if (useWageMode) {
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEndExclusive = new Date(year, month, 1);
+    const presentRows = await db.attendance.findMany({
+      where: { employeeId, present: true, date: { gte: monthStart, lt: monthEndExclusive } },
+    });
+    const daysPresent = presentRows.length;
+    const totalHours = presentRows.reduce((sum, row) => sum + Number(row.hoursWorked ?? 0), 0);
+    const rate = Number(employee.wageRate ?? 0);
+    const rateType = employee.wageRateType ?? "DAILY";
+    const unitsWorked = rateType === "HOURLY" ? totalHours : daysPresent;
+    const grossWage = Math.round(unitsWorked * rate);
+
+    proratedEarnings = {
+      basic: grossWage,
+      hra: 0,
+      da: 0,
+      conveyance: 0,
+      medicalAllowance: 0,
+      specialAllowance: 0,
+      otherAllowances: [],
+    };
+    daysPaid = daysPresent;
+    wageDetail = { rateType, rate, unitsWorked };
+    wageBasedFullGrossOverride = grossWage;
+  } else if (useAttendanceMode) {
     const monthStart = new Date(year, month - 1, 1);
     const monthEndExclusive = new Date(year, month, 1);
     const daysPresent = await db.attendance.count({
@@ -123,7 +155,12 @@ export async function computePayslipLine(
   const proration = totalDays > 0 ? daysPaid / totalDays : 0;
 
   const grossEarnings = grossFromEarnings(proratedEarnings);
-  const fullGross = grossFromEarnings(fullEarnings);
+  const fullGross = wageBasedFullGrossOverride ?? grossFromEarnings(fullEarnings);
+  // WAGE_BASED employees have no fixed HRA/Basic to annualize from — use
+  // this month's actual (zero HRA, computed wage) figures instead of
+  // whatever happens to sit in their SalaryStructure row.
+  const hraAnnualBasis = useWageMode ? 0 : fullEarnings.hra;
+  const basicAnnualBasis = useWageMode ? fullGross : fullEarnings.basic;
 
   const basicPlusDa = proratedEarnings.basic + proratedEarnings.da;
   const pf = calculatePF(basicPlusDa, org.pfApplicable && employee.pfApplicable);
@@ -144,9 +181,9 @@ export async function computePayslipLine(
     financialYear,
     section80C: Number(taxDeclaration?.section80C ?? 0),
     section80D: Number(taxDeclaration?.section80D ?? 0),
-    hraAnnual: fullEarnings.hra * 12,
+    hraAnnual: hraAnnualBasis * 12,
     hraRentPaidAnnual: Number(taxDeclaration?.hraRentPaid ?? 0),
-    basicAnnual: fullEarnings.basic * 12,
+    basicAnnual: basicAnnualBasis * 12,
     homeLoanInterest: Number(taxDeclaration?.homeLoanInterest ?? 0),
     otherIncome: Number(taxDeclaration?.otherIncome ?? 0),
   });
@@ -158,7 +195,7 @@ export async function computePayslipLine(
     employeeId,
     daysInMonth: totalDays,
     daysPaid,
-    earnings: { ...proratedEarnings } as unknown as Prisma.InputJsonValue,
+    earnings: { ...proratedEarnings, wageDetail } as unknown as Prisma.InputJsonValue,
     grossEarnings,
     pfWages: pf.pfWages,
     pfEmployee: pf.pfEmployee,

@@ -37,6 +37,7 @@ export async function buildPayslipPdfBuffer(
     medicalAllowance: number;
     specialAllowance: number;
     otherAllowances?: { name: string; amount: number; basis: "FIXED" | "ATTENDANCE" }[];
+    wageDetail?: { rateType: "HOURLY" | "DAILY"; rate: number; unitsWorked: number };
   };
 
   const buffer = await renderToBuffer(
@@ -56,6 +57,7 @@ export async function buildPayslipPdfBuffer(
       daysPaid: Number(line.daysPaid),
       daysInMonth: line.daysInMonth,
       attendanceDeduction: Number(line.attendanceDeduction),
+      wageDetail: earnings.wageDetail,
     }),
   );
 

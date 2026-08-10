@@ -31,6 +31,8 @@ export function EmployeeDetailsForm({
     employmentBasis: string;
     employeeCategory: string;
     ptApplicable: boolean;
+    pfApplicable: boolean;
+    esiApplicable: boolean;
     dol: Date | null;
     esiNumber: string;
     mlwfIdNumber: string;
@@ -38,6 +40,8 @@ export function EmployeeDetailsForm({
     shiftHoursPerDay: number | null;
     freeLeaveDaysPerMonth: number | null;
     excessLeaveDailyDeduction: number | null;
+    wageRateType: string | null;
+    wageRate: number | null;
   };
   /** Current Basic, used to auto-suggest excessLeaveDailyDeduction when the
    * hourly toggle is first switched on. */
@@ -49,12 +53,23 @@ export function EmployeeDetailsForm({
   const [excessLeaveDailyDeduction, setExcessLeaveDailyDeduction] = useState(
     defaults.excessLeaveDailyDeduction != null ? String(defaults.excessLeaveDailyDeduction) : "",
   );
+  const [pfApplicable, setPfApplicable] = useState(defaults.pfApplicable);
+  const [esiApplicable, setEsiApplicable] = useState(defaults.esiApplicable);
+  const [ptApplicable, setPtApplicable] = useState(defaults.ptApplicable);
 
   function handlePayModeChange(next: string) {
     setPayMode(next);
     if (next === "HOURLY_ATTENDANCE" && excessLeaveDailyDeduction === "") {
       const suggestion = Math.round(basic / daysInCurrentMonth());
       setExcessLeaveDailyDeduction(String(suggestion));
+    }
+    if (next === "WAGE_BASED") {
+      // One-time default when switching to wage-based pay — casual/wage
+      // workers commonly aren't covered by PF/ESI/PT the same way salaried
+      // staff are, but this is just a starting point HR can still override.
+      setPfApplicable(false);
+      setEsiApplicable(false);
+      setPtApplicable(false);
     }
   }
 
@@ -93,15 +108,45 @@ export function EmployeeDetailsForm({
       <Field label="MLWF Labour ID Number">
         <Input name="mlwfIdNumber" defaultValue={defaults.mlwfIdNumber} />
       </Field>
-      <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
-        <input type="checkbox" name="ptApplicable" defaultChecked={defaults.ptApplicable} className="h-4 w-4" />
-        Professional Tax applicable
-      </label>
+
+      <div className="col-span-full flex flex-wrap items-center gap-6">
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            name="pfApplicable"
+            checked={pfApplicable}
+            onChange={(e) => setPfApplicable(e.target.checked)}
+            className="h-4 w-4"
+          />
+          PF applicable
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            name="esiApplicable"
+            checked={esiApplicable}
+            onChange={(e) => setEsiApplicable(e.target.checked)}
+            className="h-4 w-4"
+          />
+          ESI applicable
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            name="ptApplicable"
+            checked={ptApplicable}
+            onChange={(e) => setPtApplicable(e.target.checked)}
+            className="h-4 w-4"
+          />
+          Professional Tax applicable
+        </label>
+      </div>
 
       <Field label="Pay mode">
         <Select name="payMode" value={payMode} onChange={(e) => handlePayModeChange(e.target.value)}>
           <option value="MONTHLY">Monthly (standard)</option>
           <option value="HOURLY_ATTENDANCE">Hourly / attendance-based</option>
+          <option value="WAGE_BASED">Wage-based (hourly/daily)</option>
         </Select>
       </Field>
 
@@ -140,6 +185,32 @@ export function EmployeeDetailsForm({
           <p className="col-span-full text-xs text-slate-500">
             Absences up to the free-leave allowance don&apos;t reduce pay. Beyond that, this rate is deducted from
             Basic per excess day — suggested from Basic ÷ days in month, editable per employee.
+          </p>
+        </>
+      )}
+
+      {payMode === "WAGE_BASED" && (
+        <>
+          <Field label="Wage rate type">
+            <Select name="wageRateType" defaultValue={defaults.wageRateType ?? "DAILY"}>
+              <option value="DAILY">Daily</option>
+              <option value="HOURLY">Hourly</option>
+            </Select>
+          </Field>
+          <Field label="Wage rate (₹)">
+            <Input
+              name="wageRate"
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={defaults.wageRate ?? ""}
+              placeholder="e.g. 500"
+            />
+          </Field>
+          <p className="col-span-full text-xs text-slate-500">
+            No fixed monthly salary — pay each run is this rate × days (or hours) actually worked, from
+            uploaded attendance. PF/ESI/PT default to off above but can be re-enabled if this employee&apos;s
+            arrangement requires them.
           </p>
         </>
       )}

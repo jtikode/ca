@@ -25,7 +25,8 @@ export const loginSchema = z.object({
 export const EMPLOYMENT_STAGES = ["PROBATION", "CONFIRMED"] as const;
 export const EMPLOYMENT_BASES = ["PERMANENT", "CONTRACT"] as const;
 export const EMPLOYEE_CATEGORIES = ["NON_MANAGERIAL", "MANAGERIAL"] as const;
-export const PAY_MODES = ["MONTHLY", "HOURLY_ATTENDANCE"] as const;
+export const PAY_MODES = ["MONTHLY", "HOURLY_ATTENDANCE", "WAGE_BASED"] as const;
+export const WAGE_RATE_TYPES = ["HOURLY", "DAILY"] as const;
 
 export const otherAllowanceItemSchema = z.object({
   name: z.string().min(1),
@@ -88,6 +89,10 @@ export const updateEmployeeDetailsSchema = z.object({
   shiftHoursPerDay: optionalNumber,
   freeLeaveDaysPerMonth: z.preprocess(emptyToUndefined, z.coerce.number().int().nonnegative().optional()),
   excessLeaveDailyDeduction: optionalNumber,
+  wageRateType: z.preprocess(emptyToUndefined, z.enum(WAGE_RATE_TYPES).optional()),
+  wageRate: optionalNumber,
+  pfApplicable: booleanFromCheckbox,
+  esiApplicable: booleanFromCheckbox,
 });
 
 export const leavePolicySchema = z.object({
@@ -107,6 +112,7 @@ export const attendanceImportRowSchema = z.object({
   employeeCode: z.string().min(1, "Employee code is required."),
   date: z.coerce.date({ error: "A valid date is required." }),
   present: attendancePresentSchema,
+  hoursWorked: optionalNumber,
 });
 
 export const taxDeclarationSchema = z.object({
