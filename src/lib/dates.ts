@@ -82,3 +82,63 @@ export function financialYearRangeLabel(financialYear: string): string {
   const startYear = parseFinancialYearStart(financialYear);
   return `1 April ${startYear} – 31 March ${startYear + 1}`;
 }
+
+/** Whole days from `referenceDate` to `date` (negative if `date` is in the past). */
+export function daysUntil(date: Date, referenceDate: Date = new Date()): number {
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const startOfToday = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  const startOfTarget = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return Math.round((startOfTarget.getTime() - startOfToday.getTime()) / oneDayMs);
+}
+
+/** The next occurrence (at or after `referenceDate`) of a birth date's month/day. */
+export function nextBirthday(dob: Date, referenceDate: Date = new Date()): Date {
+  const candidate = new Date(referenceDate.getFullYear(), dob.getMonth(), dob.getDate());
+  const startOfToday = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  if (candidate.getTime() < startOfToday.getTime()) {
+    return new Date(referenceDate.getFullYear() + 1, dob.getMonth(), dob.getDate());
+  }
+  return candidate;
+}
+
+/** The next occurrence (at or after `referenceDate`) of a fixed day-of-month. */
+function nextDueDate(dayOfMonth: number, referenceDate: Date): Date {
+  const candidate = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), dayOfMonth);
+  if (candidate.getTime() < new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate()).getTime()) {
+    return new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, dayOfMonth);
+  }
+  return candidate;
+}
+
+export interface StatutoryDeadline {
+  title: string;
+  dueDate: Date;
+  daysRemaining: number;
+}
+
+/**
+ * Indicative upcoming due dates for the two statutory payments with a fixed,
+ * nationwide day-of-month (EPF: 15th; TDS deposit: 7th, except TDS deducted
+ * in March which is due 30 April). Professional Tax is deliberately excluded
+ * — its due date varies by state and isn't modeled in this app.
+ */
+export function upcomingStatutoryDeadlines(referenceDate: Date = new Date()): StatutoryDeadline[] {
+  const pfDue = nextDueDate(15, referenceDate);
+
+  let tdsDue = nextDueDate(7, referenceDate);
+  if (tdsDue.getMonth() === 3) {
+    // TDS deducted in March is due 30 April, not 7 April.
+    tdsDue = new Date(tdsDue.getFullYear(), 3, 30);
+  }
+
+  const withDaysRemaining = (title: string, dueDate: Date): StatutoryDeadline => ({
+    title,
+    dueDate,
+    daysRemaining: daysUntil(dueDate, referenceDate),
+  });
+
+  return [
+    withDaysRemaining("EPF Challan", pfDue),
+    withDaysRemaining("TDS Deposit", tdsDue),
+  ];
+}

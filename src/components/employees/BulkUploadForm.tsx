@@ -15,7 +15,7 @@ export function BulkUploadForm() {
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/api/employees/template"
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
         >
           Download template
         </Link>
@@ -25,7 +25,7 @@ export function BulkUploadForm() {
             name="file"
             accept=".xlsx"
             required
-            className="text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
+            className="text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-200 hover:file:bg-slate-700"
           />
           <Button type="submit" disabled={pending}>
             {pending ? "Uploading..." : "Upload"}
@@ -33,29 +33,29 @@ export function BulkUploadForm() {
         </form>
       </div>
 
-      {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
+      {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
       {state.ok && state.createdCount != null && (
-        <p className="text-sm font-medium text-green-700">{state.createdCount} employee(s) added.</p>
+        <p className="text-sm font-medium text-emerald-400">{state.createdCount} employee(s) added.</p>
       )}
       {state.ok && state.pendingCount != null && (
-        <p className="text-sm font-medium text-amber-700">
+        <p className="text-sm font-medium text-amber-400">
           {state.pendingCount} employee(s) submitted — awaiting superadmin approval.
         </p>
       )}
       {state.rowErrors && state.rowErrors.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-red-200">
+        <div className="overflow-x-auto rounded-lg border border-red-500/20">
           <table className="w-full min-w-[400px] text-left text-sm">
             <thead>
-              <tr className="border-b border-red-200 bg-red-50 text-red-700">
+              <tr className="border-b border-red-500/20 bg-red-500/10 text-red-400">
                 <th className="py-2 pl-3 pr-4">Row</th>
                 <th className="py-2 pr-4">Problem</th>
               </tr>
             </thead>
             <tbody>
               {state.rowErrors.map((e, i) => (
-                <tr key={i} className="border-b border-red-100">
-                  <td className="py-2 pl-3 pr-4 text-slate-700">{e.row}</td>
-                  <td className="py-2 pr-4 text-slate-700">{e.message}</td>
+                <tr key={i} className="border-b border-red-500/10">
+                  <td className="py-2 pl-3 pr-4 text-slate-300">{e.row}</td>
+                  <td className="py-2 pr-4 text-slate-300">{e.message}</td>
                 </tr>
               ))}
             </tbody>

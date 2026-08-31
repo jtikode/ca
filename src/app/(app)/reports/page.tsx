@@ -49,7 +49,7 @@ export default async function ReportsPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-slate-900">Reports</h1>
+      <h1 className="text-xl font-bold text-white">Reports</h1>
 
       <Card>
         <form method="GET" className="flex flex-wrap items-end gap-3">
@@ -76,13 +76,13 @@ export default async function ReportsPage({
       </Card>
 
       <Card>
-        <h2 className="mb-1 text-lg font-bold text-slate-900">Form 16 – Part B</h2>
-        <p className="mb-4 text-sm text-slate-500">
+        <h2 className="mb-1 text-lg font-bold text-white">Form 16 – Part B</h2>
+        <p className="mb-4 text-sm text-slate-400">
           The salary and tax computation annexure only — not a substitute for the official Part A, which
           must be downloaded from the TRACES portal. Figures are computed estimates for your CA to verify.
         </p>
         {!hasPanTan ? (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">
+          <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-400">
             Add your company&apos;s PAN and TAN in{" "}
             <Link href="/settings" className="underline">
               Settings
@@ -90,32 +90,32 @@ export default async function ReportsPage({
             before generating Form 16 Part B.
           </p>
         ) : employeesWithPay.length === 0 ? (
-          <p className="text-sm text-slate-400">No finalized payroll found for {fy} yet.</p>
+          <p className="text-sm text-slate-500">No finalized payroll found for {fy} yet.</p>
         ) : (
           <div className="space-y-3">
             <a
               href={`/api/reports/form16?fy=${fy}`}
-              className="inline-block rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-amber-500 px-4 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-6px_rgba(245,158,11,0.5)] transition hover:bg-amber-400"
             >
               Download all (ZIP)
             </a>
             <table className="w-full min-w-[400px] text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
+                <tr className="border-b border-slate-800 text-slate-500">
                   <th className="py-2 pr-4">Employee</th>
                   <th className="py-2 pr-4"></th>
                 </tr>
               </thead>
               <tbody>
                 {employeesWithPay.map((t) => (
-                  <tr key={t.employeeId} className="border-b border-slate-100 text-slate-700">
+                  <tr key={t.employeeId} className="border-b border-slate-800 text-slate-300">
                     <td className="py-2 pr-4">
                       {t.employee.name} ({t.employee.employeeCode})
                     </td>
                     <td className="py-2 pr-4">
                       <a
                         href={`/api/reports/form16/${t.employeeId}?fy=${fy}`}
-                        className="text-sm font-semibold text-blue-700 hover:underline"
+                        className="text-sm font-semibold text-amber-400 hover:underline"
                       >
                         Download PDF
                       </a>
@@ -129,28 +129,28 @@ export default async function ReportsPage({
       </Card>
 
       <Card>
-        <h2 className="mb-1 text-lg font-bold text-slate-900">Form 24Q — Quarterly TDS Summary</h2>
-        <p className="mb-4 text-sm text-slate-500">
+        <h2 className="mb-1 text-lg font-bold text-white">Form 24Q — Quarterly TDS Summary</h2>
+        <p className="mb-4 text-sm text-slate-400">
           A CA-ready summary of TDS deducted per employee for the selected quarter — not an NSDL upload
           file. Your CA&apos;s own filing software still handles the actual e-filing.
         </p>
         <a
           href={`/api/reports/form24q?fy=${fy}&quarter=${quarter}`}
-          className="inline-block rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-amber-500 px-4 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-6px_rgba(245,158,11,0.5)] transition hover:bg-amber-400"
         >
           Download {quarterLabel(fy, quarter)} Excel
         </a>
       </Card>
 
       <Card>
-        <h2 className="mb-1 text-lg font-bold text-slate-900">Annual PF / ESI / PT Summary</h2>
-        <p className="mb-4 text-sm text-slate-500">
+        <h2 className="mb-1 text-lg font-bold text-white">Annual PF / ESI / PT Summary</h2>
+        <p className="mb-4 text-sm text-slate-400">
           Full financial-year PF, ESI, and Professional Tax figures per employee, for your CA&apos;s
           records.
         </p>
         <a
           href={`/api/reports/annual-statutory?fy=${fy}`}
-          className="inline-block rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-amber-500 px-4 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-6px_rgba(245,158,11,0.5)] transition hover:bg-amber-400"
         >
           Download {fy} Excel
         </a>

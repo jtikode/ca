@@ -38,11 +38,13 @@ export async function buildPayslipPdfBuffer(
     specialAllowance: number;
     otherAllowances?: { name: string; amount: number; basis: "FIXED" | "ATTENDANCE" }[];
     wageDetail?: { rateType: "HOURLY" | "DAILY"; rate: number; unitsWorked: number };
+    overtimeDetail?: { hours: number; hourlyRate: number; multiplier: number };
   };
 
   const buffer = await renderToBuffer(
     PayslipDocument({
       orgName: org.name,
+      orgLogoUrl: org.logoUrl,
       employeeName: line.employee.name,
       employeeCode: line.employee.employeeCode,
       month: line.payrollRun.month,
@@ -57,7 +59,9 @@ export async function buildPayslipPdfBuffer(
       daysPaid: Number(line.daysPaid),
       daysInMonth: line.daysInMonth,
       attendanceDeduction: Number(line.attendanceDeduction),
+      overtimeAmount: Number(line.overtimeAmount),
       wageDetail: earnings.wageDetail,
+      overtimeDetail: earnings.overtimeDetail,
     }),
   );
 

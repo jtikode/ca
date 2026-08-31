@@ -1,9 +1,10 @@
-import { Document, Page, Text, View } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image } from "@react-pdf/renderer";
 import { letterStyles, formatDate, inr } from "@/components/pdf/letterStyles";
 import { DisclaimerFooter } from "@/components/pdf/DisclaimerFooter";
 
 export function AppointmentLetterDocument({
   orgName,
+  orgLogoUrl,
   orgAddress,
   employeeName,
   employeeCode,
@@ -25,6 +26,7 @@ export function AppointmentLetterDocument({
   esiEmployerMonthly,
 }: {
   orgName: string;
+  orgLogoUrl?: string | null;
   orgAddress: string;
   employeeName: string;
   employeeCode: string;
@@ -64,6 +66,7 @@ export function AppointmentLetterDocument({
     <Document>
       <Page size="A4" style={letterStyles.page}>
         <View style={letterStyles.header}>
+          {orgLogoUrl && <Image src={orgLogoUrl} style={letterStyles.logo} />}
           <Text style={letterStyles.orgName}>{orgName}</Text>
           <Text style={letterStyles.orgAddress}>{orgAddress}</Text>
         </View>

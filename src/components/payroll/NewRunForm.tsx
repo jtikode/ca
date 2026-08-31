@@ -31,7 +31,7 @@ export function NewRunForm() {
       <Button type="submit" disabled={pending}>
         {pending ? "Starting..." : "Start payroll run"}
       </Button>
-      {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
+      {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
     </form>
   );
 }

@@ -22,6 +22,8 @@ export function EmployeeDetailsForm({
   employeeId,
   defaults,
   basic,
+  multiLocationEnabled,
+  stores,
 }: {
   employeeId: string;
   defaults: {
@@ -42,10 +44,13 @@ export function EmployeeDetailsForm({
     excessLeaveDailyDeduction: number | null;
     wageRateType: string | null;
     wageRate: number | null;
+    storeId: string | null;
   };
   /** Current Basic, used to auto-suggest excessLeaveDailyDeduction when the
    * hourly toggle is first switched on. */
   basic: number;
+  multiLocationEnabled: boolean;
+  stores: { id: string; name: string }[];
 }) {
   const action = updateEmployeeDetails.bind(null, employeeId);
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -108,9 +113,21 @@ export function EmployeeDetailsForm({
       <Field label="MLWF Labour ID Number">
         <Input name="mlwfIdNumber" defaultValue={defaults.mlwfIdNumber} />
       </Field>
+      {multiLocationEnabled && (
+        <Field label="Store">
+          <Select name="storeId" defaultValue={defaults.storeId ?? ""}>
+            <option value="">— No store —</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
 
       <div className="col-span-full flex flex-wrap items-center gap-6">
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"
             name="pfApplicable"
@@ -120,7 +137,7 @@ export function EmployeeDetailsForm({
           />
           PF applicable
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"
             name="esiApplicable"
@@ -130,7 +147,7 @@ export function EmployeeDetailsForm({
           />
           ESI applicable
         </label>
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"
             name="ptApplicable"
@@ -219,8 +236,8 @@ export function EmployeeDetailsForm({
         <Button type="submit" disabled={pending}>
           {pending ? "Saving..." : "Save details"}
         </Button>
-        {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
-        {state.ok && <p className="text-sm font-medium text-green-700">Saved.</p>}
+        {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
+        {state.ok && <p className="text-sm font-medium text-emerald-400">Saved.</p>}
       </div>
       <p className="col-span-full text-xs text-slate-500">
         Set date of leaving to enable the experience and relieving letters below.

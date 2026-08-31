@@ -1,9 +1,10 @@
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import { MONTH_NAMES } from "@/lib/dates";
 
 const styles = StyleSheet.create({
   page: { padding: 32, fontSize: 10, fontFamily: "Helvetica" },
   header: { marginBottom: 16, borderBottom: 1, borderColor: "#cbd5e1", paddingBottom: 12 },
+  logo: { width: 90, height: 36, objectFit: "contain", marginBottom: 6 },
   orgName: { fontSize: 16, fontWeight: 700 },
   title: { fontSize: 12, marginTop: 4, color: "#475569" },
   section: { marginBottom: 12 },
@@ -26,6 +27,7 @@ function inr(n: number) {
 
 export function PayslipDocument({
   orgName,
+  orgLogoUrl,
   employeeName,
   employeeCode,
   month,
@@ -40,9 +42,12 @@ export function PayslipDocument({
   daysPaid,
   daysInMonth,
   attendanceDeduction = 0,
+  overtimeAmount = 0,
   wageDetail,
+  overtimeDetail,
 }: {
   orgName: string;
+  orgLogoUrl?: string | null;
   employeeName: string;
   employeeCode: string;
   month: number;
@@ -65,15 +70,19 @@ export function PayslipDocument({
   daysPaid: number;
   daysInMonth: number;
   attendanceDeduction?: number;
+  overtimeAmount?: number;
   wageDetail?: { rateType: "HOURLY" | "DAILY"; rate: number; unitsWorked: number };
+  overtimeDetail?: { hours: number; hourlyRate: number; multiplier: number };
 }) {
   const totalDeductions = pfEmployee + esiEmployee + ptAmount + tdsAmount;
   const unitLabel = wageDetail?.rateType === "HOURLY" ? "hours" : "days";
+  const displayedGross = grossEarnings + overtimeAmount;
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
+          {orgLogoUrl && <Image src={orgLogoUrl} style={styles.logo} />}
           <Text style={styles.orgName}>{orgName}</Text>
           <Text style={styles.title}>
             Payslip — {MONTH_NAMES[month - 1]} {year}
@@ -142,9 +151,17 @@ export function PayslipDocument({
               <Text style={styles.tableCellValue}>{inr(item.amount)}</Text>
             </View>
           ))}
+          {overtimeDetail && overtimeAmount > 0 && (
+            <View style={styles.tableRow}>
+              <Text style={styles.tableCellLabel}>
+                Overtime — {overtimeDetail.hours} hrs × {overtimeDetail.multiplier}× × {inr(overtimeDetail.hourlyRate)}
+              </Text>
+              <Text style={styles.tableCellValue}>{inr(overtimeAmount)}</Text>
+            </View>
+          )}
           <View style={styles.tableRow}>
             <Text style={[styles.tableCellLabel, { fontWeight: 700 }]}>Gross earnings</Text>
-            <Text style={[styles.tableCellValue, { fontWeight: 700 }]}>{inr(grossEarnings)}</Text>
+            <Text style={[styles.tableCellValue, { fontWeight: 700 }]}>{inr(displayedGross)}</Text>
           </View>
         </View>
 

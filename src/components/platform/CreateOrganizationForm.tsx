@@ -34,7 +34,7 @@ export function CreateOrganizationForm() {
       <Field label="Owner email">
         <Input name="ownerEmail" type="email" required placeholder="owner@company.com" />
       </Field>
-      {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
+      {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
       {state.tempPassword && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Company created. Owner login: <span className="font-semibold">temp password (shown once)</span>{" "}

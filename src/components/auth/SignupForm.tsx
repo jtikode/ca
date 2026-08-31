@@ -37,7 +37,7 @@ export function SignupForm() {
       <Field label="Password">
         <Input name="password" type="password" required placeholder="At least 8 characters" />
       </Field>
-      {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
+      {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Creating account..." : "Create account"}
       </Button>

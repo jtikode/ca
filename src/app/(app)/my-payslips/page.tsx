@@ -22,17 +22,17 @@ export default async function MyPayslipsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-slate-900">{employee.name}</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-xl font-bold text-white">{employee.name}</h1>
+        <p className="text-sm text-slate-400">
           {employee.employeeCode} · {employee.state} · Joined {employee.doj.toLocaleDateString("en-IN")}
         </p>
       </div>
 
       <Card className="overflow-x-auto">
-        <h2 className="mb-4 text-lg font-bold text-slate-900">My payslips</h2>
+        <h2 className="mb-4 text-lg font-bold text-white">My payslips</h2>
         <table className="w-full min-w-[500px] text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-slate-500">
+            <tr className="border-b border-slate-800 text-slate-500">
               <th className="py-2 pr-4">Period</th>
               <th className="py-2 pr-4">Net pay</th>
               <th className="py-2 pr-4"></th>
@@ -40,15 +40,15 @@ export default async function MyPayslipsPage() {
           </thead>
           <tbody>
             {payslipLines.map((line) => (
-              <tr key={line.id} className="border-b border-slate-100">
-                <td className="py-2 pr-4 font-medium text-slate-900">
+              <tr key={line.id} className="border-b border-slate-800">
+                <td className="py-2 pr-4 font-medium text-white">
                   {MONTH_NAMES[line.payrollRun.month - 1]} {line.payrollRun.year}
                 </td>
-                <td className="py-2 pr-4 text-slate-600">₹{Number(line.netPay).toLocaleString("en-IN")}</td>
+                <td className="py-2 pr-4 text-slate-400">₹{Number(line.netPay).toLocaleString("en-IN")}</td>
                 <td className="py-2 pr-4">
                   <a
                     href={`/api/payroll/${line.payrollRunId}/payslip/${employee.id}`}
-                    className="text-sm font-semibold text-blue-700 hover:underline"
+                    className="text-sm font-semibold text-amber-400 hover:underline"
                   >
                     Download
                   </a>

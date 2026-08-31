@@ -56,8 +56,8 @@ export function TaxDeclarationForm({
         <Button type="submit" disabled={pending}>
           {pending ? "Saving..." : "Save declaration"}
         </Button>
-        {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
-        {state.ok && <p className="text-sm font-medium text-green-700">Saved.</p>}
+        {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
+        {state.ok && <p className="text-sm font-medium text-emerald-400">Saved.</p>}
       </div>
       <p className="col-span-full text-xs text-slate-500">
         Old regime deductions (80C, 80D, HRA exemption, home loan interest) only apply when the old regime is

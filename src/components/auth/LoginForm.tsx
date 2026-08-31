@@ -19,7 +19,7 @@ export function LoginForm() {
       <Field label="Password">
         <Input name="password" type="password" required placeholder="••••••••" />
       </Field>
-      {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
+      {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Signing in..." : "Sign in"}
       </Button>

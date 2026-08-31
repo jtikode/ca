@@ -27,6 +27,23 @@ export const EMPLOYMENT_BASES = ["PERMANENT", "CONTRACT"] as const;
 export const EMPLOYEE_CATEGORIES = ["NON_MANAGERIAL", "MANAGERIAL"] as const;
 export const PAY_MODES = ["MONTHLY", "HOURLY_ATTENDANCE", "WAGE_BASED"] as const;
 export const WAGE_RATE_TYPES = ["HOURLY", "DAILY"] as const;
+export const DOCUMENT_CATEGORIES = ["TRAINING", "CHECKLIST", "DOCUMENT"] as const;
+
+export const addCertificateSchema = z.object({
+  name: z.string().min(1, "Certificate name is required."),
+  expiryDate: z.coerce.date({ message: "Enter a valid expiry date." }),
+});
+
+export const addDocumentSchema = z.object({
+  title: z.string().min(1, "Title is required."),
+  category: z.enum(DOCUMENT_CATEGORIES),
+  url: z.string().url("Enter a valid URL."),
+  employeeIds: z.array(z.string()).min(1, "Select at least one employee."),
+});
+
+export const addStoreSchema = z.object({
+  name: z.string().min(1, "Store name is required."),
+});
 
 export const otherAllowanceItemSchema = z.object({
   name: z.string().min(1),
@@ -93,6 +110,7 @@ export const updateEmployeeDetailsSchema = z.object({
   wageRate: optionalNumber,
   pfApplicable: booleanFromCheckbox,
   esiApplicable: booleanFromCheckbox,
+  storeId: optionalString,
 });
 
 export const leavePolicySchema = z.object({
@@ -143,6 +161,10 @@ export const employeeImportRowSchema = employeeSchema.extend({
   // silently — require a real positive value for a bulk row instead.
   basic: z.coerce.number().positive("Basic salary is required and must be greater than 0."),
   hra: z.coerce.number().nonnegative("HRA must be 0 or greater."),
+  // Store NAME (not id) — resolved to a storeId in bulkUploadEmployees.
+  // Bulk-upload-only; the single "Add employee" form has no store field
+  // (store assignment is otherwise edit-only, see EmployeeDetailsForm).
+  store: optionalString,
 });
 
 export const payrollRunInputSchema = z.object({

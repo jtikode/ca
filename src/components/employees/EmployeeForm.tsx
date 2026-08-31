@@ -104,11 +104,11 @@ export function EmployeeForm() {
         <Input name="specialAllowance" type="number" min="0" step="1" defaultValue={0} />
       </Field>
 
-      <label className="flex items-center gap-2 text-sm text-slate-700">
+      <label className="flex items-center gap-2 text-sm text-slate-300">
         <input type="checkbox" name="pfApplicable" defaultChecked className="h-4 w-4" />
         PF applicable
       </label>
-      <label className="flex items-center gap-2 text-sm text-slate-700">
+      <label className="flex items-center gap-2 text-sm text-slate-300">
         <input type="checkbox" name="esiApplicable" defaultChecked className="h-4 w-4" />
         ESI applicable
       </label>
@@ -117,11 +117,11 @@ export function EmployeeForm() {
         <Button type="submit" disabled={pending}>
           {pending ? "Adding..." : "Add employee"}
         </Button>
-        {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
+        {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
         {state.ok && state.pending && (
-          <p className="text-sm font-medium text-amber-700">Submitted — awaiting superadmin approval.</p>
+          <p className="text-sm font-medium text-amber-400">Submitted — awaiting superadmin approval.</p>
         )}
-        {state.ok && !state.pending && <p className="text-sm font-medium text-green-700">Employee added.</p>}
+        {state.ok && !state.pending && <p className="text-sm font-medium text-emerald-400">Employee added.</p>}
       </div>
     </form>
   );

@@ -44,16 +44,16 @@ export default async function ApprovalsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-slate-900">Approvals</h1>
+      <h1 className="text-xl font-bold text-white">Approvals</h1>
 
       <Card className="overflow-x-auto">
-        <h2 className="mb-1 text-lg font-bold text-slate-900">Pending requests</h2>
-        <p className="mb-4 text-sm text-slate-500">
+        <h2 className="mb-1 text-lg font-bold text-white">Pending requests</h2>
+        <p className="mb-4 text-sm text-slate-400">
           Changes submitted by HR managers wait here until you approve or reject them.
         </p>
         <table className="w-full min-w-[700px] text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-slate-500">
+            <tr className="border-b border-slate-800 text-slate-500">
               <th className="py-2 pr-4">Requested by</th>
               <th className="py-2 pr-4">Change</th>
               <th className="py-2 pr-4">Submitted</th>
@@ -73,9 +73,9 @@ export default async function ApprovalsPage() {
               }
 
               return (
-                <tr key={req.id} className="border-b border-slate-100 align-top">
-                  <td className="py-3 pr-4 font-medium text-slate-900">{req.requestedBy.name}</td>
-                  <td className="py-3 pr-4 text-slate-700">{summary}</td>
+                <tr key={req.id} className="border-b border-slate-800 align-top">
+                  <td className="py-3 pr-4 font-medium text-white">{req.requestedBy.name}</td>
+                  <td className="py-3 pr-4 text-slate-300">{summary}</td>
                   <td className="py-3 pr-4 text-slate-500">{req.createdAt.toLocaleDateString("en-IN")}</td>
                   <td className="py-3 pr-4">
                     <ApprovalActions requestId={req.id} />

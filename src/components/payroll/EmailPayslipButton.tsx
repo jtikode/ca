@@ -24,12 +24,12 @@ export function EmailPayslipButton({ payrollRunId, employeeId }: { payrollRunId:
         type="button"
         onClick={handleClick}
         disabled={isPending}
-        className="text-sm font-semibold text-blue-700 hover:underline disabled:opacity-50"
+        className="text-sm font-semibold text-amber-400 hover:underline disabled:opacity-50"
       >
         {isPending ? "Sending..." : "Email"}
       </button>
       {status && (
-        <span className={`text-xs ${status.ok ? "text-green-700" : "text-red-600"}`}>{status.message}</span>
+        <span className={`text-xs ${status.ok ? "text-emerald-400" : "text-red-400"}`}>{status.message}</span>
       )}
     </div>
   );

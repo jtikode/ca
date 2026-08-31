@@ -7,7 +7,7 @@ export default async function NewOrganizationPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
-      <h1 className="text-xl font-bold text-slate-900">New company</h1>
+      <h1 className="text-xl font-bold text-white">New company</h1>
       <Card>
         <CreateOrganizationForm />
       </Card>

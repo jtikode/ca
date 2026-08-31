@@ -28,6 +28,7 @@ export interface PayslipLineData {
   ptAmount: number;
   tdsAmount: number;
   attendanceDeduction: number;
+  overtimeAmount: number;
   netPay: number;
 }
 
@@ -162,6 +163,39 @@ export async function computePayslipLine(
   const hraAnnualBasis = useWageMode ? 0 : fullEarnings.hra;
   const basicAnnualBasis = useWageMode ? fullGross : fullEarnings.basic;
 
+  // Auto overtime, org-toggleable. Deliberately excluded from the PF/ESI
+  // wage base and the annual TDS projection below — it's a fluctuating
+  // monthly figure, not a stable annualizable one, and PF/ESI wage-base
+  // treatment of overtime varies; this is an explicit MVP-level
+  // simplification, same spirit as the other approximations in this file.
+  let overtimeAmount = 0;
+  let overtimeDetail: { hours: number; hourlyRate: number; multiplier: number } | undefined;
+  if (org.overtimeAutoCalculateEnabled) {
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEndExclusive = new Date(year, month, 1);
+    const rows = await db.attendance.findMany({
+      where: {
+        employeeId,
+        present: true,
+        date: { gte: monthStart, lt: monthEndExclusive },
+        hoursWorked: { not: null },
+      },
+    });
+    const standardHours = Number(org.standardHoursPerDay);
+    const otHours = rows.reduce((sum, row) => sum + Math.max(0, Number(row.hoursWorked) - standardHours), 0);
+    if (otHours > 0) {
+      const hourlyRate =
+        employee.payMode === "WAGE_BASED"
+          ? employee.wageRateType === "HOURLY"
+            ? Number(employee.wageRate ?? 0)
+            : Number(employee.wageRate ?? 0) / standardHours
+          : fullEarnings.basic / (standardHours * totalDays);
+      const multiplier = Number(org.overtimeRateMultiplier);
+      overtimeAmount = Math.round(otHours * hourlyRate * multiplier);
+      overtimeDetail = { hours: otHours, hourlyRate: Math.round(hourlyRate), multiplier };
+    }
+  }
+
   const basicPlusDa = proratedEarnings.basic + proratedEarnings.da;
   const pf = calculatePF(basicPlusDa, org.pfApplicable && employee.pfApplicable);
   const esi = calculateESI(grossEarnings, basicPlusDa, org.esiApplicable && employee.esiApplicable);
@@ -189,13 +223,13 @@ export async function computePayslipLine(
   });
   const tdsAmount = Math.round((annualTds / 12) * proration);
 
-  const netPay = grossEarnings - pf.pfEmployee - esi.esiEmployee - ptAmount - tdsAmount;
+  const netPay = grossEarnings + overtimeAmount - pf.pfEmployee - esi.esiEmployee - ptAmount - tdsAmount;
 
   return {
     employeeId,
     daysInMonth: totalDays,
     daysPaid,
-    earnings: { ...proratedEarnings, wageDetail } as unknown as Prisma.InputJsonValue,
+    earnings: { ...proratedEarnings, wageDetail, overtimeDetail } as unknown as Prisma.InputJsonValue,
     grossEarnings,
     pfWages: pf.pfWages,
     pfEmployee: pf.pfEmployee,
@@ -208,6 +242,7 @@ export async function computePayslipLine(
     ptAmount,
     tdsAmount,
     attendanceDeduction,
+    overtimeAmount,
     netPay,
   };
 }

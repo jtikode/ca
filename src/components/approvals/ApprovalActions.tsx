@@ -27,8 +27,8 @@ export function ApprovalActions({ requestId }: { requestId: string }) {
           </Button>
         </form>
       </div>
-      {approveState.error && <p className="text-xs font-medium text-red-600">{approveState.error}</p>}
-      {rejectState.error && <p className="text-xs font-medium text-red-600">{rejectState.error}</p>}
+      {approveState.error && <p className="text-xs font-medium text-red-400">{approveState.error}</p>}
+      {rejectState.error && <p className="text-xs font-medium text-red-400">{rejectState.error}</p>}
     </div>
   );
 }

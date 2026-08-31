@@ -20,6 +20,7 @@ function generateTempPassword(): string {
 const inviteHrManagerSchema = z.object({
   name: z.string().min(1, "Name is required."),
   email: z.string().email("Enter a valid email."),
+  storeId: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.string().optional()),
 });
 
 export async function inviteHrManager(_prevState: InviteResult | null, formData: FormData): Promise<InviteResult> {
@@ -28,6 +29,7 @@ export async function inviteHrManager(_prevState: InviteResult | null, formData:
   const parsed = inviteHrManagerSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
+    storeId: formData.get("storeId"),
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
@@ -45,6 +47,7 @@ export async function inviteHrManager(_prevState: InviteResult | null, formData:
       email: parsed.data.email,
       name: parsed.data.name,
       role: "HR_MANAGER",
+      storeId: parsed.data.storeId,
       passwordHash: await hashPassword(tempPassword),
     },
   });

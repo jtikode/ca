@@ -3,6 +3,7 @@ import { StyleSheet } from "@react-pdf/renderer";
 export const letterStyles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", lineHeight: 1.5 },
   header: { marginBottom: 20, borderBottom: 1, borderColor: "#cbd5e1", paddingBottom: 12 },
+  logo: { width: 90, height: 36, objectFit: "contain", marginBottom: 6 },
   orgName: { fontSize: 16, fontWeight: 700 },
   orgAddress: { fontSize: 9, color: "#475569", marginTop: 2 },
   title: { fontSize: 13, fontWeight: 700, marginTop: 12, marginBottom: 12 },

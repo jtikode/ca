@@ -25,6 +25,7 @@ const TEMPLATE_COLUMNS = [
   "employmentStage",
   "employmentBasis",
   "employeeCategory",
+  "store",
 ] as const;
 
 const EXAMPLE_ROW: Record<(typeof TEMPLATE_COLUMNS)[number], string | number> = {
@@ -50,6 +51,7 @@ const EXAMPLE_ROW: Record<(typeof TEMPLATE_COLUMNS)[number], string | number> = 
   employmentStage: "PROBATION",
   employmentBasis: "PERMANENT",
   employeeCategory: "NON_MANAGERIAL",
+  store: "",
 };
 
 export function buildEmployeeTemplateWorkbook(): Buffer {

@@ -30,8 +30,8 @@ export function LeavePolicyForm({
         <Button type="submit" disabled={pending}>
           {pending ? "Saving..." : "Save leave policy"}
         </Button>
-        {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
-        {state.ok && <p className="text-sm font-medium text-green-700">Saved.</p>}
+        {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
+        {state.ok && <p className="text-sm font-medium text-emerald-400">Saved.</p>}
       </div>
     </form>
   );

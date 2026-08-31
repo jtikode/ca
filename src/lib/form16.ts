@@ -29,6 +29,7 @@ export interface QuarterlyBreakupRow {
 
 export interface Form16PartBData {
   orgName: string;
+  orgLogoUrl: string | null;
   orgAddress: string;
   orgPan: string;
   orgTan: string;
@@ -125,6 +126,7 @@ export async function buildForm16PartBData(
     ok: true,
     data: {
       orgName: org.legalName ?? org.name,
+      orgLogoUrl: org.logoUrl,
       orgAddress: org.address ?? "[Company address — add in Settings]",
       orgPan: org.pan,
       orgTan: org.tan,

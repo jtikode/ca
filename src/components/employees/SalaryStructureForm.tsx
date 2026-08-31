@@ -58,7 +58,7 @@ export function SalaryStructureForm({
       </div>
 
       <div>
-        <p className="mb-2 text-sm font-semibold text-slate-700">Other allowances</p>
+        <p className="mb-2 text-sm font-semibold text-slate-300">Other allowances</p>
         <div className="space-y-2">
           {rows.map((row, i) => (
             <div key={i} className="flex flex-wrap items-center gap-2">
@@ -67,7 +67,7 @@ export function SalaryStructureForm({
                 placeholder="Name"
                 value={row.name}
                 onChange={(e) => updateRow(i, { name: e.target.value })}
-                className="w-40 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900 placeholder-slate-700"
+                className="w-40 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white placeholder-slate-500"
               />
               <input
                 type="number"
@@ -75,12 +75,12 @@ export function SalaryStructureForm({
                 min="0"
                 value={row.amount}
                 onChange={(e) => updateRow(i, { amount: Number(e.target.value) })}
-                className="w-28 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
+                className="w-28 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white"
               />
               <select
                 value={row.basis}
                 onChange={(e) => updateRow(i, { basis: e.target.value as "FIXED" | "ATTENDANCE" })}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-900"
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white"
               >
                 <option value="FIXED">Fixed</option>
                 <option value="ATTENDANCE">Attendance-based</option>
@@ -88,7 +88,7 @@ export function SalaryStructureForm({
               <button
                 type="button"
                 onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
-                className="text-sm font-semibold text-red-600 hover:underline"
+                className="text-sm font-semibold text-red-400 hover:underline"
               >
                 Remove
               </button>
@@ -98,7 +98,7 @@ export function SalaryStructureForm({
         <button
           type="button"
           onClick={() => setRows((prev) => [...prev, { name: "", amount: 0, basis: "FIXED" }])}
-          className="mt-2 text-sm font-semibold text-blue-700 hover:underline"
+          className="mt-2 text-sm font-semibold text-amber-400 hover:underline"
         >
           + Add allowance
         </button>
@@ -110,11 +110,11 @@ export function SalaryStructureForm({
           {pending ? "Saving..." : "Save revision"}
         </Button>
       </div>
-      {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
+      {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
       {state.ok && state.pending && (
-        <p className="text-sm font-medium text-amber-700">Submitted — awaiting superadmin approval.</p>
+        <p className="text-sm font-medium text-amber-400">Submitted — awaiting superadmin approval.</p>
       )}
-      {state.ok && !state.pending && <p className="text-sm font-medium text-green-700">Salary structure updated.</p>}
+      {state.ok && !state.pending && <p className="text-sm font-medium text-emerald-400">Salary structure updated.</p>}
     </form>
   );
 }

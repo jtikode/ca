@@ -41,7 +41,7 @@ export function CreateEmployeeLoginForm({
       <Button type="submit" disabled={pending}>
         {pending ? "Creating..." : "Create login"}
       </Button>
-      {state.error && <p className="text-sm font-medium text-red-600">{state.error}</p>}
+      {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
       {state.tempPassword && (
         <p className="w-full rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Login created. Temporary password (shown once):{" "}

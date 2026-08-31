@@ -1,4 +1,4 @@
-import { Document, Page, Text, View } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image } from "@react-pdf/renderer";
 import { letterStyles, formatDate, inr } from "@/components/pdf/letterStyles";
 import { Form16PartBDisclaimer } from "@/components/pdf/Form16PartBDisclaimer";
 import { MONTH_NAMES } from "@/lib/dates";
@@ -10,6 +10,7 @@ const RECONCILIATION_THRESHOLD_PCT = 0.02;
 export function Form16PartBDocument(data: Form16PartBData) {
   const {
     orgName,
+    orgLogoUrl,
     orgAddress,
     orgPan,
     orgTan,
@@ -41,6 +42,7 @@ export function Form16PartBDocument(data: Form16PartBData) {
     <Document>
       <Page size="A4" style={letterStyles.page}>
         <View style={letterStyles.header}>
+          {orgLogoUrl && <Image src={orgLogoUrl} style={letterStyles.logo} />}
           <Text style={letterStyles.orgName}>{orgName}</Text>
           <Text style={letterStyles.orgAddress}>{orgAddress}</Text>
         </View>

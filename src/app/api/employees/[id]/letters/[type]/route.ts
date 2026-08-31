@@ -59,6 +59,7 @@ export async function GET(
     buffer = await renderToBuffer(
       OfferLetterDocument({
         orgName,
+        orgLogoUrl: org.logoUrl,
         orgAddress,
         employeeName: employee.name,
         designation,
@@ -92,6 +93,7 @@ export async function GET(
     buffer = await renderToBuffer(
       AppointmentLetterDocument({
         orgName,
+        orgLogoUrl: org.logoUrl,
         orgAddress,
         employeeName: employee.name,
         employeeCode: employee.employeeCode,
@@ -123,6 +125,7 @@ export async function GET(
     buffer = await renderToBuffer(
       ExperienceLetterDocument({
         orgName,
+        orgLogoUrl: org.logoUrl,
         orgAddress,
         employeeName: employee.name,
         employeeCode: employee.employeeCode,
@@ -137,6 +140,7 @@ export async function GET(
     buffer = await renderToBuffer(
       RelievingLetterDocument({
         orgName,
+        orgLogoUrl: org.logoUrl,
         orgAddress,
         employeeName: employee.name,
         employeeCode: employee.employeeCode,

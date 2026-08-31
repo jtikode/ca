@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { DaysPaidCell } from "@/components/payroll/DaysPaidCell";
 import { EmailPayslipButton } from "@/components/payroll/EmailPayslipButton";
 import { finalizePayrollRun, deleteDraftPayrollRun } from "@/actions/payrollActions";
@@ -31,6 +32,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
 
   const isDraft = run.status === "DRAFT";
   const hasAttendanceDeduction = run.payslipLines.some((line) => Number(line.attendanceDeduction) > 0);
+  const hasOvertime = run.payslipLines.some((line) => Number(line.overtimeAmount) > 0);
 
   const totals = run.payslipLines.reduce(
     (acc, line) => ({
@@ -41,26 +43,19 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
       tds: acc.tds + Number(line.tdsAmount),
       net: acc.net + Number(line.netPay),
       attendanceDeduction: acc.attendanceDeduction + Number(line.attendanceDeduction),
+      overtimeAmount: acc.overtimeAmount + Number(line.overtimeAmount),
     }),
-    { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0, attendanceDeduction: 0 },
+    { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0, attendanceDeduction: 0, overtimeAmount: 0 },
   );
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">
+          <h1 className="text-xl font-bold text-white">
             {MONTH_NAMES[run.month - 1]} {run.year}
           </h1>
-          <span
-            className={
-              isDraft
-                ? "rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700"
-                : "rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700"
-            }
-          >
-            {isDraft ? "Draft" : "Finalized"}
-          </span>
+          <Badge tone={isDraft ? "warning" : "success"}>{isDraft ? "Draft" : "Finalized"}</Badge>
         </div>
         {isDraft ? (
           <div className="flex gap-2">
@@ -76,7 +71,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
         ) : (
           <Link
             href={`/payroll/${run.id}/export`}
-            className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-amber-500 px-4 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-6px_rgba(245,158,11,0.5)] transition hover:bg-amber-400"
           >
             Export for CA
           </Link>
@@ -86,10 +81,11 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
       <Card className="overflow-x-auto">
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-slate-500">
+            <tr className="border-b border-slate-800 text-slate-500">
               <th className="py-2 pr-4">Employee</th>
               <th className="py-2 pr-4">Days paid</th>
               {hasAttendanceDeduction && <th className="py-2 pr-4">Attendance deduction</th>}
+              {hasOvertime && <th className="py-2 pr-4">Overtime</th>}
               <th className="py-2 pr-4">Gross</th>
               <th className="py-2 pr-4">PF (emp.)</th>
               <th className="py-2 pr-4">ESI (emp.)</th>
@@ -101,8 +97,8 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
           </thead>
           <tbody>
             {run.payslipLines.map((line) => (
-              <tr key={line.id} className="border-b border-slate-100 text-slate-700">
-                <td className="py-2 pr-4 font-medium text-slate-900">{line.employee.name}</td>
+              <tr key={line.id} className="border-b border-slate-800 text-slate-300">
+                <td className="py-2 pr-4 font-medium text-white">{line.employee.name}</td>
                 <td className="py-2 pr-4">
                   <DaysPaidCell
                     payrollRunId={run.id}
@@ -117,18 +113,23 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
                     {Number(line.attendanceDeduction) > 0 ? `-${inr(Number(line.attendanceDeduction))}` : "—"}
                   </td>
                 )}
+                {hasOvertime && (
+                  <td className="py-2 pr-4">
+                    {Number(line.overtimeAmount) > 0 ? `+${inr(Number(line.overtimeAmount))}` : "—"}
+                  </td>
+                )}
                 <td className="py-2 pr-4">{inr(Number(line.grossEarnings))}</td>
                 <td className="py-2 pr-4">{inr(Number(line.pfEmployee))}</td>
                 <td className="py-2 pr-4">{inr(Number(line.esiEmployee))}</td>
                 <td className="py-2 pr-4">{inr(Number(line.ptAmount))}</td>
                 <td className="py-2 pr-4">{inr(Number(line.tdsAmount))}</td>
-                <td className="py-2 pr-4 font-semibold text-slate-900">{inr(Number(line.netPay))}</td>
+                <td className="py-2 pr-4 font-semibold text-white">{inr(Number(line.netPay))}</td>
                 {!isDraft && (
                   <td className="py-2 pr-4">
                     <div className="flex flex-col items-start gap-1">
                       <a
                         href={`/api/payroll/${run.id}/payslip/${line.employeeId}`}
-                        className="text-sm font-semibold text-blue-700 hover:underline"
+                        className="text-sm font-semibold text-amber-400 hover:underline"
                       >
                         Payslip
                       </a>
@@ -140,7 +141,10 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
             ))}
             {run.payslipLines.length === 0 && (
               <tr>
-                <td colSpan={hasAttendanceDeduction ? 9 : 8} className="py-4 text-center text-slate-400">
+                <td
+                  colSpan={8 + (hasAttendanceDeduction ? 1 : 0) + (hasOvertime ? 1 : 0)}
+                  className="py-4 text-center text-slate-400"
+                >
                   No active employees to pay.
                 </td>
               </tr>
@@ -148,12 +152,17 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
           </tbody>
           {run.payslipLines.length > 0 && (
             <tfoot>
-              <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
+              <tr className="border-t-2 border-slate-700 font-semibold text-white">
                 <td className="py-2 pr-4">Total</td>
                 <td className="py-2 pr-4"></td>
                 {hasAttendanceDeduction && (
                   <td className="py-2 pr-4">
                     {totals.attendanceDeduction > 0 ? `-${inr(totals.attendanceDeduction)}` : "—"}
+                  </td>
+                )}
+                {hasOvertime && (
+                  <td className="py-2 pr-4">
+                    {totals.overtimeAmount > 0 ? `+${inr(totals.overtimeAmount)}` : "—"}
                   </td>
                 )}
                 <td className="py-2 pr-4">{inr(totals.gross)}</td>

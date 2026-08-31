@@ -5,8 +5,8 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
   return (
     <select
       className={clsx(
-        "h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm",
-        "focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200",
+        "h-10 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-white",
+        "focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20",
         className,
       )}
       {...props}

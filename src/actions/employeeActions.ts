@@ -253,15 +253,20 @@ export async function updateEmployeeDetails(
     wageRate: formData.get("wageRate"),
     pfApplicable: formData.get("pfApplicable"),
     esiApplicable: formData.get("esiApplicable"),
+    storeId: formData.get("storeId"),
   });
 
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
+  // storeId needs an explicit null (not "leave unchanged") when the admin picks
+  // "No store" — optionalString's undefined would otherwise be dropped by
+  // Prisma's update and silently leave a previous assignment in place.
+  const { storeId, ...rest } = parsed.data;
   await db.employee.update({
     where: { id: employeeId },
-    data: parsed.data,
+    data: { ...rest, storeId: storeId ?? null },
   });
 
   revalidatePath(`/employees/${employeeId}`);
@@ -291,9 +296,20 @@ export async function bulkUploadEmployees(
     return { ok: false, error: `${errors.length} row(s) had errors — fix and re-upload.`, rowErrors: errors };
   }
 
+  // Store is uploaded as a name, not an id — resolve it once against this
+  // org's stores (case-insensitive). Blank or unmatched names simply leave
+  // the employee unassigned; a bad store name never blocks the upload.
+  const orgStores = await db.store.findMany({ where: { orgId: session.orgId }, select: { id: true, name: true } });
+  const storeIdByName = new Map(orgStores.map((s) => [s.name.toLowerCase(), s.id]));
+  const resolvedRows = valid.map((row) => {
+    const { store, ...rest } = row;
+    const storeId = store ? storeIdByName.get(store.toLowerCase()) : undefined;
+    return { ...rest, storeId };
+  });
+
   if (session.role === "HR_MANAGER") {
     await db.approvalRequest.createMany({
-      data: valid.map((row) => {
+      data: resolvedRows.map((row) => {
         const { doj, dob, ...rest } = row;
         return {
           orgId: session.orgId,
@@ -306,11 +322,11 @@ export async function bulkUploadEmployees(
 
     revalidatePath("/employees");
     revalidatePath("/approvals");
-    return { ok: true, pendingCount: valid.length };
+    return { ok: true, pendingCount: resolvedRows.length };
   }
 
   await db.$transaction(
-    valid.map((row) => {
+    resolvedRows.map((row) => {
       const { basic, hra, da, conveyance, medicalAllowance, specialAllowance, otherAllowances, ...employeeData } =
         row;
       return db.employee.create({

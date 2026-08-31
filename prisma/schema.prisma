@@ -68,6 +68,12 @@ enum WageRateType {
   DAILY
 }
 
+enum DocumentCategory {
+  TRAINING
+  CHECKLIST
+  DOCUMENT
+}
+
 // One row per SMB customer of this SaaS. Every other business record is
 // scoped to an Organization for tenant isolation.
 model Organization {
@@ -94,6 +100,19 @@ model Organization {
   // Off by default so an org doesn't get surprise emails/costs until HR
   // opts in. Manual "Email payslip" sends ignore this toggle entirely.
   payslipEmailEnabled      Boolean  @default(false)
+  // Link to a publicly-viewable image (e.g. a Google Drive "anyone with the
+  // link" share, auto-rewritten to a direct-view URL by
+  // src/lib/logoUrl.ts) — not an uploaded file, see that module's comment.
+  logoUrl                  String?
+  // Off by default so no org sees a surprise pay change until they opt in,
+  // same philosophy as payslipEmailEnabled above. See src/lib/payrollEngine.ts.
+  overtimeAutoCalculateEnabled Boolean @default(false)
+  standardHoursPerDay          Decimal @default(8)
+  overtimeRateMultiplier       Decimal @default(2)
+  // Off by default — hides all store/location UI (Settings, employee/HR
+  // assignment, dashboard by-store stats, bulk-upload store column) for the
+  // majority of orgs that operate from a single location.
+  multiLocationEnabled     Boolean  @default(false)
   createdAt                DateTime @default(now())
 
   users                  User[]
@@ -103,9 +122,28 @@ model Organization {
   approvalRequests       ApprovalRequest[]
   attendances            Attendance[]
   leavePolicy            LeavePolicy?
+  certificates           Certificate[]
+  companyDocuments       CompanyDocument[]
+  stores                 Store[]
   createdByPlatformAdmin PlatformAdmin?    @relation(fields: [createdByPlatformAdminId], references: [id])
 
   @@index([state])
+}
+
+// A physical location/centre, only relevant when multiLocationEnabled is on.
+// Employee/User store assignment is informational only — it does not
+// restrict data access (see AGENTS/plan notes for the "label only" decision).
+model Store {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  employees    Employee[]
+  hrManagers   User[]
+
+  @@index([orgId])
 }
 
 // Deliberately separate from User/Organization — the SaaS operator's own
@@ -133,10 +171,15 @@ model User {
   // Set only for role=EMPLOYEE — links a self-service login to the payroll
   // record it's allowed to see.
   employeeId   String?  @unique
+  // Which store/centre this HR manager is associated with — label only, does
+  // NOT restrict what they can see or manage (every HR manager still sees
+  // the whole org). Only meaningful when role=HR_MANAGER.
+  storeId      String?
   createdAt    DateTime @default(now())
 
   organization       Organization      @relation(fields: [orgId], references: [id])
   employee           Employee?         @relation(fields: [employeeId], references: [id])
+  store              Store?            @relation(fields: [storeId], references: [id])
   requestedApprovals ApprovalRequest[] @relation("RequestedApprovals")
   reviewedApprovals  ApprovalRequest[] @relation("ReviewedApprovals")
 
@@ -193,14 +236,19 @@ model Employee {
   excessLeaveDailyDeduction Decimal?
   wageRateType              WageRateType?
   wageRate                  Decimal?
+  // Which store/centre this employee belongs to — only meaningful when the
+  // org has multiLocationEnabled. See src/app/(app)/settings/page.tsx.
+  storeId          String?
   createdAt        DateTime         @default(now())
 
-  organization     Organization      @relation(fields: [orgId], references: [id])
-  salaryStructures SalaryStructure[]
-  taxDeclarations  TaxDeclaration[]
-  payslipLines     PayslipLine[]
-  attendances      Attendance[]
-  loginUser        User?
+  organization      Organization      @relation(fields: [orgId], references: [id])
+  salaryStructures  SalaryStructure[]
+  taxDeclarations   TaxDeclaration[]
+  payslipLines      PayslipLine[]
+  attendances       Attendance[]
+  loginUser         User?
+  visibleDocuments  CompanyDocument[]
+  store             Store?            @relation(fields: [storeId], references: [id])
 
   @@unique([orgId, employeeCode])
   @@index([orgId])
@@ -299,6 +347,11 @@ model PayslipLine {
   // MONTHLY employees. Recorded here (rather than only in `earnings`) so the
   // payslip PDF can show it as an explicit, transparent line.
   attendanceDeduction Decimal @default(0)
+  // Auto-calculated overtime pay (see src/lib/payrollEngine.ts) — zero
+  // unless the org has overtimeAutoCalculateEnabled on. Stored separately
+  // (not folded into grossEarnings) so PF/ESI wage-base figures elsewhere
+  // stay base-earnings-only; included in netPay directly.
+  overtimeAmount Decimal @default(0)
   netPay        Decimal
   createdAt     DateTime @default(now())
 
@@ -346,6 +399,41 @@ model LeavePolicy {
   organization Organization @relation(fields: [orgId], references: [id])
 
   @@index([state])
+}
+
+// Company-level (not per-employee) certificate/registration expiry tracker
+// — name and expiry date are filled in manually by HR, surfaced as dashboard
+// reminders. See src/app/(app)/dashboard/page.tsx.
+model Certificate {
+  id         String   @id @default(cuid())
+  orgId      String
+  name       String
+  expiryDate DateTime
+  createdAt  DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+}
+
+// Admin-curated training material / checklists / documents, each a link
+// (not an uploaded file — see src/app/(app)/documents/page.tsx) shared with
+// specific employees chosen by the admin via the visibleTo relation. No
+// separate "visible to all" flag — selecting every employee in the admin UI
+// is the only way to broadcast, keeping one source of truth for who can see
+// what.
+model CompanyDocument {
+  id        String           @id @default(cuid())
+  orgId     String
+  title     String
+  category  DocumentCategory
+  url       String
+  createdAt DateTime         @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  visibleTo    Employee[]
+
+  @@index([orgId])
 }
 
 // Daily attendance facts imported from a biometric-export-derived
