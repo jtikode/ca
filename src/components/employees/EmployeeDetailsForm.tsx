@@ -158,6 +158,13 @@ export function EmployeeDetailsForm({
           Professional Tax applicable
         </label>
       </div>
+      {(pfApplicable !== defaults.pfApplicable || esiApplicable !== defaults.esiApplicable) && (
+        <p className="col-span-full rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-400">
+          You&apos;re changing PF and/or ESI applicability for this employee. This affects statutory deduction
+          calculations on payroll runs from now on — double check with your CA that this is correct before relying
+          on it. Saving will go ahead regardless.
+        </p>
+      )}
 
       <Field label="Pay mode">
         <Select name="payMode" value={payMode} onChange={(e) => handlePayModeChange(e.target.value)}>

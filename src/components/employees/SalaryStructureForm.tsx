@@ -67,6 +67,9 @@ export function SalaryStructureForm({
         <Field label="Conveyance">
           <Input name="conveyance" type="number" min="0" step="1" defaultValue={defaults.conveyance} />
         </Field>
+        <Field label="Medical allowance">
+          <Input name="medicalAllowance" type="number" min="0" step="1" defaultValue={defaults.medicalAllowance} />
+        </Field>
         <Field label="Special allowance">
           <Input name="specialAllowance" type="number" min="0" step="1" defaultValue={defaults.specialAllowance} />
         </Field>
