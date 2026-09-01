@@ -39,6 +39,7 @@ export async function buildPayslipPdfBuffer(
     otherAllowances?: { name: string; amount: number; basis: "FIXED" | "ATTENDANCE" }[];
     wageDetail?: { rateType: "HOURLY" | "DAILY"; rate: number; unitsWorked: number };
     overtimeDetail?: { hours: number; hourlyRate: number; multiplier: number };
+    adjustments?: { name: string; amount: number; type: "EARNING" | "DEDUCTION" }[];
   };
 
   const buffer = await renderToBuffer(
@@ -60,6 +61,7 @@ export async function buildPayslipPdfBuffer(
       daysInMonth: line.daysInMonth,
       attendanceDeduction: Number(line.attendanceDeduction),
       overtimeAmount: Number(line.overtimeAmount),
+      adjustments: earnings.adjustments,
       wageDetail: earnings.wageDetail,
       overtimeDetail: earnings.overtimeDetail,
     }),

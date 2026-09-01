@@ -43,6 +43,7 @@ export function PayslipDocument({
   daysInMonth,
   attendanceDeduction = 0,
   overtimeAmount = 0,
+  adjustments = [],
   wageDetail,
   overtimeDetail,
 }: {
@@ -71,12 +72,17 @@ export function PayslipDocument({
   daysInMonth: number;
   attendanceDeduction?: number;
   overtimeAmount?: number;
+  adjustments?: { name: string; amount: number; type: "EARNING" | "DEDUCTION" }[];
   wageDetail?: { rateType: "HOURLY" | "DAILY"; rate: number; unitsWorked: number };
   overtimeDetail?: { hours: number; hourlyRate: number; multiplier: number };
 }) {
-  const totalDeductions = pfEmployee + esiEmployee + ptAmount + tdsAmount;
+  const earningAdjustments = adjustments.filter((a) => a.type === "EARNING");
+  const deductionAdjustments = adjustments.filter((a) => a.type === "DEDUCTION");
+  const adjustmentEarningsTotal = earningAdjustments.reduce((sum, a) => sum + a.amount, 0);
+  const adjustmentDeductionsTotal = deductionAdjustments.reduce((sum, a) => sum + a.amount, 0);
+  const totalDeductions = pfEmployee + esiEmployee + ptAmount + tdsAmount + adjustmentDeductionsTotal;
   const unitLabel = wageDetail?.rateType === "HOURLY" ? "hours" : "days";
-  const displayedGross = grossEarnings + overtimeAmount;
+  const displayedGross = grossEarnings + overtimeAmount + adjustmentEarningsTotal;
 
   return (
     <Document>
@@ -159,6 +165,12 @@ export function PayslipDocument({
               <Text style={styles.tableCellValue}>{inr(overtimeAmount)}</Text>
             </View>
           )}
+          {earningAdjustments.map((a, i) => (
+            <View style={styles.tableRow} key={`adj-earn-${i}`}>
+              <Text style={styles.tableCellLabel}>{a.name}</Text>
+              <Text style={styles.tableCellValue}>{inr(a.amount)}</Text>
+            </View>
+          ))}
           <View style={styles.tableRow}>
             <Text style={[styles.tableCellLabel, { fontWeight: 700 }]}>Gross earnings</Text>
             <Text style={[styles.tableCellValue, { fontWeight: 700 }]}>{inr(displayedGross)}</Text>
@@ -183,6 +195,12 @@ export function PayslipDocument({
             <Text style={styles.tableCellLabel}>TDS</Text>
             <Text style={styles.tableCellValue}>{inr(tdsAmount)}</Text>
           </View>
+          {deductionAdjustments.map((a, i) => (
+            <View style={styles.tableRow} key={`adj-ded-${i}`}>
+              <Text style={styles.tableCellLabel}>{a.name}</Text>
+              <Text style={styles.tableCellValue}>{inr(a.amount)}</Text>
+            </View>
+          ))}
           <View style={styles.tableRow}>
             <Text style={[styles.tableCellLabel, { fontWeight: 700 }]}>Total deductions</Text>
             <Text style={[styles.tableCellValue, { fontWeight: 700 }]}>{inr(totalDeductions)}</Text>

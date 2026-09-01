@@ -29,7 +29,14 @@ export interface PayslipLineData {
   tdsAmount: number;
   attendanceDeduction: number;
   overtimeAmount: number;
+  adjustmentsAmount: number;
   netPay: number;
+}
+
+export interface AdjustmentInput {
+  name: string;
+  amount: number;
+  type: "EARNING" | "DEDUCTION";
 }
 
 function proratedOtherAllowances(items: OtherAllowanceItem[], ratio: number): OtherAllowanceItem[] {
@@ -47,6 +54,7 @@ export async function computePayslipLine(
   month: number,
   year: number,
   daysPaidOverride?: number,
+  adjustments: AdjustmentInput[] = [],
 ): Promise<PayslipLineData | null> {
   const [org, employee] = await Promise.all([
     db.organization.findUniqueOrThrow({ where: { id: orgId } }),
@@ -223,13 +231,22 @@ export async function computePayslipLine(
   });
   const tdsAmount = Math.round((annualTds / 12) * proration);
 
-  const netPay = grossEarnings + overtimeAmount - pf.pfEmployee - esi.esiEmployee - ptAmount - tdsAmount;
+  // One-off, run-scoped amounts (see PayrollAdjustment) — deliberately kept
+  // out of pfWages/esiWages above, same reasoning as overtimeAmount: a
+  // fluctuating one-off, not stable recurring pay.
+  const adjustmentsAmount = adjustments.reduce(
+    (sum, a) => sum + (a.type === "EARNING" ? a.amount : -a.amount),
+    0,
+  );
+
+  const netPay =
+    grossEarnings + overtimeAmount + adjustmentsAmount - pf.pfEmployee - esi.esiEmployee - ptAmount - tdsAmount;
 
   return {
     employeeId,
     daysInMonth: totalDays,
     daysPaid,
-    earnings: { ...proratedEarnings, wageDetail, overtimeDetail } as unknown as Prisma.InputJsonValue,
+    earnings: { ...proratedEarnings, wageDetail, overtimeDetail, adjustments } as unknown as Prisma.InputJsonValue,
     grossEarnings,
     pfWages: pf.pfWages,
     pfEmployee: pf.pfEmployee,
@@ -243,6 +260,7 @@ export async function computePayslipLine(
     tdsAmount,
     attendanceDeduction,
     overtimeAmount,
+    adjustmentsAmount,
     netPay,
   };
 }

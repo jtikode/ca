@@ -181,4 +181,33 @@ export const payrollRunInputSchema = z.object({
   year: z.coerce.number().int().min(2020).max(2100),
 });
 
+const salaryStructureFieldsSchema = z.object({
+  basic: z.coerce.number().nonnegative(),
+  hra: z.coerce.number().nonnegative(),
+  da: z.coerce.number().nonnegative().default(0),
+  conveyance: z.coerce.number().nonnegative().default(0),
+  medicalAllowance: z.coerce.number().nonnegative().default(0),
+  specialAllowance: z.coerce.number().nonnegative().default(0),
+  otherAllowances: otherAllowancesFromJson.default([]),
+});
+
+// Used for "Save revision" (creates a new versioned row) — effectiveFrom
+// lets an increment be dated ("effective 1 Apr") instead of always landing
+// on today.
+export const salaryRevisionInputSchema = salaryStructureFieldsSchema.extend({
+  effectiveFrom: z.coerce.date({ error: "Enter a valid effective date." }),
+});
+
+// Used for "Edit current" (updates the latest row in place) — no
+// effectiveFrom, since it's not creating a new dated version.
+export const salaryStructureEditSchema = salaryStructureFieldsSchema;
+
+// A one-off amount for a single employee on a single Draft payroll run —
+// see PayrollAdjustment in prisma/schema.prisma.
+export const payrollAdjustmentSchema = z.object({
+  name: z.string().min(1, "Name is required."),
+  amount: z.coerce.number().positive("Amount must be greater than 0."),
+  type: z.enum(["EARNING", "DEDUCTION"]),
+});
+
 export { optionalString, optionalNumber, booleanFromCheckbox };

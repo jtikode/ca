@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { updateSalaryStructure, type ActionResult } from "@/actions/employeeActions";
+import { updateSalaryStructure, editSalaryStructure, type ActionResult } from "@/actions/employeeActions";
 import { Input } from "@/components/ui/Input";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -14,11 +14,19 @@ interface OtherAllowanceRow {
   basis: "FIXED" | "ATTENDANCE";
 }
 
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function SalaryStructureForm({
   employeeId,
+  structureId,
+  canEditInPlace,
   defaults,
 }: {
   employeeId: string;
+  structureId: string;
+  canEditInPlace: boolean;
   defaults: {
     basic: number;
     hra: number;
@@ -29,9 +37,16 @@ export function SalaryStructureForm({
     otherAllowances: OtherAllowanceRow[];
   };
 }) {
-  const action = updateSalaryStructure.bind(null, employeeId);
-  const [state, formAction, pending] = useActionState(action, initialState);
+  const [mode, setMode] = useState<"revise" | "edit">("revise");
+  const reviseAction = updateSalaryStructure.bind(null, employeeId);
+  const editAction = editSalaryStructure.bind(null, structureId);
+  const [reviseState, reviseFormAction, revisePending] = useActionState(reviseAction, initialState);
+  const [editState, editFormAction, editPending] = useActionState(editAction, initialState);
   const [rows, setRows] = useState<OtherAllowanceRow[]>(defaults.otherAllowances);
+
+  const state = mode === "edit" ? editState : reviseState;
+  const formAction = mode === "edit" ? editFormAction : reviseFormAction;
+  const pending = mode === "edit" ? editPending : revisePending;
 
   function updateRow(i: number, patch: Partial<OtherAllowanceRow>) {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -55,6 +70,11 @@ export function SalaryStructureForm({
         <Field label="Special allowance">
           <Input name="specialAllowance" type="number" min="0" step="1" defaultValue={defaults.specialAllowance} />
         </Field>
+        {mode === "revise" && (
+          <Field label="Effective from">
+            <Input name="effectiveFrom" type="date" defaultValue={todayIsoDate()} required />
+          </Field>
+        )}
       </div>
 
       <div>
@@ -105,11 +125,28 @@ export function SalaryStructureForm({
         <input type="hidden" name="otherAllowancesJson" value={JSON.stringify(rows)} readOnly />
       </div>
 
-      <div>
+      <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={pending}>
-          {pending ? "Saving..." : "Save revision"}
+          {pending ? "Saving..." : mode === "edit" ? "Save edit" : "Save revision"}
         </Button>
+        {canEditInPlace && (
+          <button
+            type="button"
+            onClick={() => setMode((m) => (m === "edit" ? "revise" : "edit"))}
+            className="text-sm font-semibold text-amber-400 hover:underline"
+          >
+            {mode === "edit"
+              ? "Cancel — record an increment instead"
+              : "Made a mistake just now? Edit this structure in place"}
+          </button>
+        )}
       </div>
+      {mode === "edit" && (
+        <p className="text-sm text-slate-400">
+          This corrects the current structure directly — no new revision, no dated increment. Past payroll runs are
+          unaffected either way, since they store their own frozen numbers.
+        </p>
+      )}
       {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
       {state.ok && state.pending && (
         <p className="text-sm font-medium text-amber-400">Submitted — awaiting superadmin approval.</p>

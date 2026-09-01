@@ -245,6 +245,7 @@ model Employee {
   salaryStructures  SalaryStructure[]
   taxDeclarations   TaxDeclaration[]
   payslipLines      PayslipLine[]
+  payrollAdjustments PayrollAdjustment[]
   attendances       Attendance[]
   loginUser         User?
   visibleDocuments  CompanyDocument[]
@@ -313,16 +314,45 @@ model PayrollRun {
   finalizedAt DateTime?
   createdAt   DateTime         @default(now())
 
-  organization    Organization    @relation(fields: [orgId], references: [id])
-  payslipLines    PayslipLine[]
-  caExportBatches CAExportBatch[]
+  organization       Organization        @relation(fields: [orgId], references: [id])
+  payslipLines        PayslipLine[]
+  caExportBatches     CAExportBatch[]
+  payrollAdjustments  PayrollAdjustment[]
 
   @@unique([orgId, month, year])
   @@index([orgId])
 }
 
+enum AdjustmentType {
+  EARNING
+  DEDUCTION
+}
+
+// A one-off amount for a single employee on a single run (e.g. a special
+// allowance or a one-time deduction) — distinct from a SalaryStructure
+// change, which is permanent and versioned. Only addable/removable while
+// the parent run is DRAFT; excluded from PF/ESI wage base, same treatment
+// as overtimeAmount below, since it's a fluctuating one-off, not stable
+// recurring pay.
+model PayrollAdjustment {
+  id           String         @id @default(cuid())
+  payrollRunId String
+  employeeId   String
+  name         String
+  amount       Decimal
+  type         AdjustmentType
+  createdAt    DateTime       @default(now())
+
+  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id])
+  employee   Employee   @relation(fields: [employeeId], references: [id])
+
+  @@index([payrollRunId])
+}
+
 // Immutable once the parent run is finalized — corrections happen via a new
-// run, not by editing history.
+// run, not by editing history. (A run can also be explicitly reverted to
+// DRAFT — see revertPayrollRunToDraft — which is a deliberate, warned
+// exception to that rule, not silent editing.)
 model PayslipLine {
   id            String   @id @default(cuid())
   payrollRunId  String
@@ -352,6 +382,11 @@ model PayslipLine {
   // (not folded into grossEarnings) so PF/ESI wage-base figures elsewhere
   // stay base-earnings-only; included in netPay directly.
   overtimeAmount Decimal @default(0)
+  // Signed net total of this run's PayrollAdjustment rows for this employee
+  // (EARNING minus DEDUCTION) at the time this line was last computed.
+  // Excluded from PF/ESI wage-base figures, same reasoning as overtimeAmount
+  // above. The itemized list is folded into `earnings` for full detail.
+  adjustmentsAmount Decimal @default(0)
   netPay        Decimal
   createdAt     DateTime @default(now())
 

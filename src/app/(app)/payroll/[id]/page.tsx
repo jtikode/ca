@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { DaysPaidCell } from "@/components/payroll/DaysPaidCell";
 import { EmailPayslipButton } from "@/components/payroll/EmailPayslipButton";
-import { finalizePayrollRun, deleteDraftPayrollRun } from "@/actions/payrollActions";
+import { RevertRunButton } from "@/components/payroll/RevertRunButton";
+import { PayrollAdjustmentForm } from "@/components/payroll/PayrollAdjustmentForm";
+import { finalizePayrollRun, deleteDraftPayrollRun, recomputePayrollRun } from "@/actions/payrollActions";
 import { MONTH_NAMES } from "@/lib/dates";
 
 function inr(n: number) {
@@ -25,6 +27,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
         include: { employee: true },
         orderBy: { employee: { name: "asc" } },
       },
+      payrollAdjustments: true,
     },
   });
 
@@ -33,6 +36,11 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
   const isDraft = run.status === "DRAFT";
   const hasAttendanceDeduction = run.payslipLines.some((line) => Number(line.attendanceDeduction) > 0);
   const hasOvertime = run.payslipLines.some((line) => Number(line.overtimeAmount) > 0);
+  const hasAdjustments = isDraft || run.payslipLines.some((line) => Number(line.adjustmentsAmount) !== 0);
+  const adjustmentsByEmployee = new Map<string, typeof run.payrollAdjustments>();
+  for (const a of run.payrollAdjustments) {
+    adjustmentsByEmployee.set(a.employeeId, [...(adjustmentsByEmployee.get(a.employeeId) ?? []), a]);
+  }
 
   const totals = run.payslipLines.reduce(
     (acc, line) => ({
@@ -44,8 +52,9 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
       net: acc.net + Number(line.netPay),
       attendanceDeduction: acc.attendanceDeduction + Number(line.attendanceDeduction),
       overtimeAmount: acc.overtimeAmount + Number(line.overtimeAmount),
+      adjustmentsAmount: acc.adjustmentsAmount + Number(line.adjustmentsAmount),
     }),
-    { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0, attendanceDeduction: 0, overtimeAmount: 0 },
+    { gross: 0, pf: 0, esi: 0, pt: 0, tds: 0, net: 0, attendanceDeduction: 0, overtimeAmount: 0, adjustmentsAmount: 0 },
   );
 
   return (
@@ -59,6 +68,11 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
         </div>
         {isDraft ? (
           <div className="flex gap-2">
+            <form action={recomputePayrollRun.bind(null, run.id)}>
+              <Button type="submit" variant="outline">
+                Recompute
+              </Button>
+            </form>
             <form action={deleteDraftPayrollRun.bind(null, run.id)}>
               <Button type="submit" variant="outline">
                 Discard run
@@ -69,14 +83,22 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
             </form>
           </div>
         ) : (
-          <Link
-            href={`/payroll/${run.id}/export`}
-            className="inline-flex h-10 items-center justify-center rounded-lg bg-amber-500 px-4 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-6px_rgba(245,158,11,0.5)] transition hover:bg-amber-400"
-          >
-            Export for CA
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/payroll/${run.id}/export`}
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-amber-500 px-4 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-6px_rgba(245,158,11,0.5)] transition hover:bg-amber-400"
+            >
+              Export for CA
+            </Link>
+            {run.finalizedAt && <RevertRunButton payrollRunId={run.id} finalizedAt={run.finalizedAt} />}
+          </div>
         )}
       </div>
+      {isDraft && (
+        <p className="text-sm text-amber-400/80">
+          This run is still a Draft — figures here can change until you finalize it.
+        </p>
+      )}
 
       <Card className="overflow-x-auto">
         <table className="w-full min-w-[900px] text-left text-sm">
@@ -86,6 +108,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
               <th className="py-2 pr-4">Days paid</th>
               {hasAttendanceDeduction && <th className="py-2 pr-4">Attendance deduction</th>}
               {hasOvertime && <th className="py-2 pr-4">Overtime</th>}
+              {hasAdjustments && <th className="py-2 pr-4">Adjustments</th>}
               <th className="py-2 pr-4">Gross</th>
               <th className="py-2 pr-4">PF (emp.)</th>
               <th className="py-2 pr-4">ESI (emp.)</th>
@@ -118,6 +141,26 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
                     {Number(line.overtimeAmount) > 0 ? `+${inr(Number(line.overtimeAmount))}` : "—"}
                   </td>
                 )}
+                {hasAdjustments && (
+                  <td className="py-2 pr-4">
+                    {isDraft ? (
+                      <PayrollAdjustmentForm
+                        payrollRunId={run.id}
+                        employeeId={line.employeeId}
+                        adjustments={(adjustmentsByEmployee.get(line.employeeId) ?? []).map((a) => ({
+                          id: a.id,
+                          name: a.name,
+                          amount: Number(a.amount),
+                          type: a.type,
+                        }))}
+                      />
+                    ) : Number(line.adjustmentsAmount) !== 0 ? (
+                      `${Number(line.adjustmentsAmount) > 0 ? "+" : ""}${inr(Number(line.adjustmentsAmount))}`
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                )}
                 <td className="py-2 pr-4">{inr(Number(line.grossEarnings))}</td>
                 <td className="py-2 pr-4">{inr(Number(line.pfEmployee))}</td>
                 <td className="py-2 pr-4">{inr(Number(line.esiEmployee))}</td>
@@ -142,7 +185,9 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
             {run.payslipLines.length === 0 && (
               <tr>
                 <td
-                  colSpan={8 + (hasAttendanceDeduction ? 1 : 0) + (hasOvertime ? 1 : 0)}
+                  colSpan={
+                    8 + (hasAttendanceDeduction ? 1 : 0) + (hasOvertime ? 1 : 0) + (hasAdjustments ? 1 : 0)
+                  }
                   className="py-4 text-center text-slate-400"
                 >
                   No active employees to pay.
@@ -163,6 +208,13 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
                 {hasOvertime && (
                   <td className="py-2 pr-4">
                     {totals.overtimeAmount > 0 ? `+${inr(totals.overtimeAmount)}` : "—"}
+                  </td>
+                )}
+                {hasAdjustments && (
+                  <td className="py-2 pr-4">
+                    {totals.adjustmentsAmount !== 0
+                      ? `${totals.adjustmentsAmount > 0 ? "+" : ""}${inr(totals.adjustmentsAmount)}`
+                      : "—"}
                   </td>
                 )}
                 <td className="py-2 pr-4">{inr(totals.gross)}</td>

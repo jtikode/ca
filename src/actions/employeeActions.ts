@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { assertSession } from "@/lib/permissions";
-import { employeeSchema, taxDeclarationSchema, updateEmployeeDetailsSchema } from "@/lib/validators";
+import {
+  employeeSchema,
+  taxDeclarationSchema,
+  updateEmployeeDetailsSchema,
+  salaryRevisionInputSchema,
+  salaryStructureEditSchema,
+} from "@/lib/validators";
 import { parseEmployeeImport, type ImportError } from "@/lib/employeeImport";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -131,25 +137,16 @@ export async function updateSalaryStructure(
     return { ok: false, error: "Employee not found." };
   }
 
-  const parsed = employeeSchema
-    .pick({
-      basic: true,
-      hra: true,
-      da: true,
-      conveyance: true,
-      medicalAllowance: true,
-      specialAllowance: true,
-      otherAllowances: true,
-    })
-    .safeParse({
-      basic: formData.get("basic"),
-      hra: formData.get("hra"),
-      da: formData.get("da"),
-      conveyance: formData.get("conveyance"),
-      medicalAllowance: formData.get("medicalAllowance"),
-      specialAllowance: formData.get("specialAllowance"),
-      otherAllowances: formData.get("otherAllowancesJson"),
-    });
+  const parsed = salaryRevisionInputSchema.safeParse({
+    basic: formData.get("basic"),
+    hra: formData.get("hra"),
+    da: formData.get("da"),
+    conveyance: formData.get("conveyance"),
+    medicalAllowance: formData.get("medicalAllowance"),
+    specialAllowance: formData.get("specialAllowance"),
+    otherAllowances: formData.get("otherAllowancesJson"),
+    effectiveFrom: formData.get("effectiveFrom"),
+  });
 
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
@@ -170,17 +167,62 @@ export async function updateSalaryStructure(
     return { ok: true, pending: true };
   }
 
-  const { otherAllowances, ...salary } = parsed.data;
+  const { otherAllowances, effectiveFrom, ...salary } = parsed.data;
   await db.salaryStructure.create({
     data: {
       employeeId,
-      effectiveFrom: new Date(),
+      effectiveFrom,
       ...salary,
       otherAllowances: otherAllowances as unknown as Prisma.InputJsonValue,
     },
   });
 
   revalidatePath(`/employees/${employeeId}`);
+  return { ok: true };
+}
+
+// Updates the employee's CURRENT (most recent) salary structure row in
+// place — for fixing a same-day mistake, not for recording a real change.
+// Older rows stay untouched/read-only so the audit trail is append-only;
+// a real increment still goes through updateSalaryStructure above (a new
+// dated revision). SUPERADMIN-only — HR_MANAGER keeps using the
+// approval-queued revision path for any salary change.
+export async function editSalaryStructure(
+  structureId: string,
+  _prevState: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const session = await assertSession(["SUPERADMIN"]);
+
+  const structure = await db.salaryStructure.findFirst({
+    where: { id: structureId, employee: { orgId: session.orgId } },
+    include: { employee: { include: { salaryStructures: { orderBy: { effectiveFrom: "desc" }, take: 1 } } } },
+  });
+  if (!structure) return { ok: false, error: "Salary structure not found." };
+  if (structure.employee.salaryStructures[0]?.id !== structureId) {
+    return { ok: false, error: "Only the current salary structure can be edited in place." };
+  }
+
+  const parsed = salaryStructureEditSchema.safeParse({
+    basic: formData.get("basic"),
+    hra: formData.get("hra"),
+    da: formData.get("da"),
+    conveyance: formData.get("conveyance"),
+    medicalAllowance: formData.get("medicalAllowance"),
+    specialAllowance: formData.get("specialAllowance"),
+    otherAllowances: formData.get("otherAllowancesJson"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  const { otherAllowances, ...salary } = parsed.data;
+  await db.salaryStructure.update({
+    where: { id: structureId },
+    data: { ...salary, otherAllowances: otherAllowances as unknown as Prisma.InputJsonValue },
+  });
+
+  revalidatePath(`/employees/${structure.employeeId}`);
   return { ok: true };
 }
 
