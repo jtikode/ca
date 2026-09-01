@@ -1,7 +1,16 @@
 import { z } from "zod";
 
 const emptyToUndefined = (val: unknown) => (val === "" || val == null ? undefined : val);
-const optionalString = z.preprocess(emptyToUndefined, z.string().optional());
+// Excel auto-types a long digit-only cell (bank account no., UAN, ...) as a
+// Number unless the column was formatted as Text first — coerce it back to
+// a string rather than rejecting the whole row for a near-universal mistake.
+const optionalString = z.preprocess(
+  (val) => {
+    const v = emptyToUndefined(val);
+    return typeof v === "number" ? String(v) : v;
+  },
+  z.string().optional(),
+);
 const optionalNumber = z.preprocess(emptyToUndefined, z.coerce.number().optional());
 const booleanFromCheckbox = z.preprocess((v) => v === "on" || v === "true", z.boolean());
 
