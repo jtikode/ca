@@ -179,6 +179,7 @@ export const employeeImportRowSchema = employeeSchema.extend({
 export const payrollRunInputSchema = z.object({
   month: z.coerce.number().int().min(1).max(12),
   year: z.coerce.number().int().min(2020).max(2100),
+  copyFromLastRun: z.coerce.boolean().optional(),
 });
 
 const salaryStructureFieldsSchema = z.object({
@@ -208,6 +209,26 @@ export const payrollAdjustmentSchema = z.object({
   name: z.string().min(1, "Name is required."),
   amount: z.coerce.number().positive("Amount must be greater than 0."),
   type: z.enum(["EARNING", "DEDUCTION"]),
+});
+
+// Public /calculator page — same earnings shape as salaryStructureFieldsSchema
+// plus the inputs unique to a standalone estimate (state, PF/ESI applicable,
+// and an optional daily field-allowance for staff paid a per-day expense).
+export const ctcCalculatorSchema = z.object({
+  basic: z.coerce.number().nonnegative(),
+  hra: z.coerce.number().nonnegative().default(0),
+  da: z.coerce.number().nonnegative().default(0),
+  conveyance: z.coerce.number().nonnegative().default(0),
+  medicalAllowance: z.coerce.number().nonnegative().default(0),
+  specialAllowance: z.coerce.number().nonnegative().default(0),
+  state: z.string().min(1, "State is required."),
+  // A real checkbox on this form, not an Excel cell — booleanFromCheckbox is
+  // the correct semantics here (unchecked/absent = false), unlike
+  // flexibleBoolean used for bulk-upload cells (blank = true).
+  pfApplicable: booleanFromCheckbox,
+  esiApplicable: booleanFromCheckbox,
+  dailyFieldAllowance: optionalNumber,
+  fieldDaysPerMonth: optionalNumber,
 });
 
 export { optionalString, optionalNumber, booleanFromCheckbox };

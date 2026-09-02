@@ -7,10 +7,36 @@ import { assertSession } from "@/lib/permissions";
 import { payrollRunInputSchema, payrollAdjustmentSchema } from "@/lib/validators";
 import { computePayslipLine, type AdjustmentInput } from "@/lib/payrollEngine";
 import { sendPayslipEmailInternal } from "@/actions/payslipEmailActions";
+import { daysInMonth } from "@/lib/dates";
 
 async function getAdjustments(payrollRunId: string, employeeId: string): Promise<AdjustmentInput[]> {
   const rows = await db.payrollAdjustment.findMany({ where: { payrollRunId, employeeId } });
   return rows.map((r) => ({ name: r.name, amount: Number(r.amount), type: r.type }));
+}
+
+// Recomputes one employee's line without touching anything about days-paid —
+// used after adding/removing an adjustment, where the only thing that
+// should change is the adjustment total. Preserves whatever days-paid is
+// already on the line (e.g. a prior manual partial-month edit) instead of
+// resetting it back to a full month, same reasoning as recomputeRun below.
+async function recomputeOneEmployeeLine(payrollRunId: string, employeeId: string, orgId: string) {
+  const [run, employee, existingLine] = await Promise.all([
+    db.payrollRun.findFirstOrThrow({ where: { id: payrollRunId } }),
+    db.employee.findFirstOrThrow({ where: { id: employeeId } }),
+    db.payslipLine.findUnique({ where: { payrollRunId_employeeId: { payrollRunId, employeeId } } }),
+  ]);
+
+  const daysPaidOverride =
+    employee.payMode === "MONTHLY" && existingLine ? Number(existingLine.daysPaid) : undefined;
+  const adjustments = await getAdjustments(payrollRunId, employeeId);
+  const line = await computePayslipLine(orgId, employeeId, run.month, run.year, daysPaidOverride, adjustments);
+  if (!line) return;
+
+  await db.payslipLine.upsert({
+    where: { payrollRunId_employeeId: { payrollRunId, employeeId } },
+    create: { payrollRunId, ...line },
+    update: line,
+  });
 }
 
 export interface ActionResult {
@@ -24,6 +50,7 @@ export async function createPayrollRun(_prevState: ActionResult | null, formData
   const parsed = payrollRunInputSchema.safeParse({
     month: formData.get("month"),
     year: formData.get("year"),
+    copyFromLastRun: formData.get("copyFromLastRun"),
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
@@ -40,18 +67,79 @@ export async function createPayrollRun(_prevState: ActionResult | null, formData
     data: { orgId: session.orgId, month: parsed.data.month, year: parsed.data.year },
   });
 
-  await recomputeRun(run.id, session.orgId);
+  const daysPaidOverrides = parsed.data.copyFromLastRun
+    ? await copyFromPreviousRun(run.id, session.orgId, parsed.data.month, parsed.data.year)
+    : undefined;
+
+  await recomputeRun(run.id, session.orgId, daysPaidOverrides);
 
   redirect(`/payroll/${run.id}`);
 }
 
-async function recomputeRun(payrollRunId: string, orgId: string) {
+// For a small business that pays the same people the same amount every
+// month: seeds the new (still fully-editable) Draft with the previous run's
+// per-employee adjustments and days-paid, instead of leaving HR to re-enter
+// them by hand. Returns the days-paid map for recomputeRun to apply.
+async function copyFromPreviousRun(
+  newRunId: string,
+  orgId: string,
+  newMonth: number,
+  newYear: number,
+): Promise<Map<string, number>> {
+  const previousRun = await db.payrollRun.findFirst({
+    where: { orgId, id: { not: newRunId } },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+    include: { payslipLines: true, payrollAdjustments: true },
+  });
+  if (!previousRun) return new Map();
+
+  if (previousRun.payrollAdjustments.length > 0) {
+    await db.payrollAdjustment.createMany({
+      data: previousRun.payrollAdjustments.map((a) => ({
+        payrollRunId: newRunId,
+        employeeId: a.employeeId,
+        name: a.name,
+        amount: a.amount,
+        type: a.type,
+      })),
+    });
+  }
+
+  const newTotalDays = daysInMonth(newMonth, newYear);
+  const overrides = new Map<string, number>();
+  for (const line of previousRun.payslipLines) {
+    const prevDaysPaid = Number(line.daysPaid);
+    // Paid in full last month → let the new month default to its own full
+    // day count instead of carrying over a raw number that may not match a
+    // different month length (28 vs 30 vs 31 days).
+    if (prevDaysPaid >= line.daysInMonth) continue;
+    // Otherwise carry over the same attendance ratio, scaled to this month.
+    const ratio = line.daysInMonth > 0 ? prevDaysPaid / line.daysInMonth : 1;
+    overrides.set(line.employeeId, Math.round(ratio * newTotalDays * 2) / 2);
+  }
+  return overrides;
+}
+
+async function recomputeRun(payrollRunId: string, orgId: string, daysPaidOverrides?: Map<string, number>) {
   const run = await db.payrollRun.findFirstOrThrow({ where: { id: payrollRunId, orgId } });
   const employees = await db.employee.findMany({ where: { orgId, status: "ACTIVE" } });
+  // Whatever's already recorded on this run (e.g. a manual partial-days
+  // edit) — used as the fallback below so recomputing for an unrelated
+  // reason (Recompute button, adding/removing an adjustment) doesn't
+  // silently reset an employee back to a full month.
+  const existingLines = await db.payslipLine.findMany({ where: { payrollRunId } });
+  const existingDaysPaid = new Map(existingLines.map((l) => [l.employeeId, Number(l.daysPaid)]));
 
   for (const employee of employees) {
     const adjustments = await getAdjustments(payrollRunId, employee.id);
-    const line = await computePayslipLine(orgId, employee.id, run.month, run.year, undefined, adjustments);
+    // Only apply a days-paid figure for standard MONTHLY employees —
+    // HOURLY_ATTENDANCE/WAGE_BASED pay should keep computing from this
+    // month's own attendance, not a stored/copied day count.
+    const daysPaidOverride =
+      employee.payMode === "MONTHLY"
+        ? (daysPaidOverrides?.get(employee.id) ?? existingDaysPaid.get(employee.id))
+        : undefined;
+    const line = await computePayslipLine(orgId, employee.id, run.month, run.year, daysPaidOverride, adjustments);
     if (!line) continue;
 
     await db.payslipLine.upsert({
@@ -183,14 +271,7 @@ export async function addPayrollAdjustment(
     data: { payrollRunId, employeeId, ...parsed.data },
   });
 
-  const adjustments = await getAdjustments(payrollRunId, employeeId);
-  const line = await computePayslipLine(session.orgId, employeeId, run.month, run.year, undefined, adjustments);
-  if (line) {
-    await db.payslipLine.update({
-      where: { payrollRunId_employeeId: { payrollRunId, employeeId } },
-      data: line,
-    });
-  }
+  await recomputeOneEmployeeLine(payrollRunId, employeeId, session.orgId);
 
   revalidatePath(`/payroll/${payrollRunId}`);
   return { ok: true };
@@ -207,21 +288,7 @@ export async function removePayrollAdjustment(adjustmentId: string): Promise<voi
 
   await db.payrollAdjustment.delete({ where: { id: adjustmentId } });
 
-  const adjustments = await getAdjustments(adjustment.payrollRunId, adjustment.employeeId);
-  const line = await computePayslipLine(
-    session.orgId,
-    adjustment.employeeId,
-    adjustment.payrollRun.month,
-    adjustment.payrollRun.year,
-    undefined,
-    adjustments,
-  );
-  if (line) {
-    await db.payslipLine.update({
-      where: { payrollRunId_employeeId: { payrollRunId: adjustment.payrollRunId, employeeId: adjustment.employeeId } },
-      data: line,
-    });
-  }
+  await recomputeOneEmployeeLine(adjustment.payrollRunId, adjustment.employeeId, session.orgId);
 
   revalidatePath(`/payroll/${adjustment.payrollRunId}`);
 }

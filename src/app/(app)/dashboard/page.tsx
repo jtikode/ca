@@ -19,6 +19,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PayrollCharts, type CostBreakdownSlice, type MonthlyTotal } from "@/components/dashboard/PayrollCharts";
+import { StatutoryWidget } from "@/components/dashboard/StatutoryWidget";
 import { finalizePayrollRun } from "@/actions/payrollActions";
 import {
   MONTH_NAMES,
@@ -95,6 +96,12 @@ export default async function DashboardPage() {
   const upcomingBirthday = employeesWithDob
     .map((e) => ({ name: e.name, date: nextBirthday(e.dob!) }))
     .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
+
+  const statutoryEmployees = await db.employee.findMany({
+    where: { orgId: session.orgId, status: "ACTIVE" },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, pfApplicable: true, esiApplicable: true },
+  });
 
   const [latestFinalizedRun, recentFinalizedRuns] = await Promise.all([
     db.payrollRun.findFirst({
@@ -517,6 +524,8 @@ export default async function DashboardPage() {
               </Link>
             </Card>
           )}
+
+          <StatutoryWidget employees={statutoryEmployees} />
 
           <div className="rounded-3xl border border-amber-500/20 bg-gradient-to-b from-amber-500/10 to-slate-900/40 p-6">
             <div className="mb-2 flex items-center gap-2">

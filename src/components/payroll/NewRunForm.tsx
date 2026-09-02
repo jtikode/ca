@@ -28,10 +28,18 @@ export function NewRunForm() {
       <Field label="Year">
         <Input name="year" type="number" defaultValue={now.getFullYear()} required className="w-28" />
       </Field>
+      <label className="flex items-center gap-2 pb-2.5 text-sm text-slate-300">
+        <input type="checkbox" name="copyFromLastRun" defaultChecked className="h-4 w-4" />
+        Copy adjustments and days-paid from last month
+      </label>
       <Button type="submit" disabled={pending}>
         {pending ? "Starting..." : "Start payroll run"}
       </Button>
       {state.error && <p className="text-sm font-medium text-red-400">{state.error}</p>}
+      <p className="w-full text-xs text-slate-500">
+        Same salary every month? Leave this checked — full-attendance employees still just get the new month&apos;s
+        full days automatically. Uncheck only if this month is different.
+      </p>
     </form>
   );
 }

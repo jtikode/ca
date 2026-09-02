@@ -125,6 +125,26 @@ export async function toggleEmployeeStatus(employeeId: string, active: boolean):
   revalidatePath("/employees");
 }
 
+// A narrow, single-field flip for the Dashboard compliance widget — deliberately
+// not routed through updateEmployeeDetails, which requires the whole details
+// form. Affects statutory deduction math on payroll runs from now on; the
+// caller's UI carries the "confirm with your CA" warning.
+export async function toggleEmployeeStatutory(
+  employeeId: string,
+  field: "pfApplicable" | "esiApplicable",
+  value: boolean,
+): Promise<void> {
+  const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
+
+  await db.employee.updateMany({
+    where: { id: employeeId, orgId: session.orgId },
+    data: { [field]: value },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/employees/${employeeId}`);
+}
+
 export async function updateSalaryStructure(
   employeeId: string,
   _prevState: ActionResult | null,

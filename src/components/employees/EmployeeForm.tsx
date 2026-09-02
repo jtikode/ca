@@ -105,11 +105,11 @@ export function EmployeeForm() {
       </Field>
 
       <label className="flex items-center gap-2 text-sm text-slate-300">
-        <input type="checkbox" name="pfApplicable" defaultChecked className="h-4 w-4" />
+        <input type="checkbox" name="pfApplicable" className="h-4 w-4" />
         PF applicable
       </label>
       <label className="flex items-center gap-2 text-sm text-slate-300">
-        <input type="checkbox" name="esiApplicable" defaultChecked className="h-4 w-4" />
+        <input type="checkbox" name="esiApplicable" className="h-4 w-4" />
         ESI applicable
       </label>
 
