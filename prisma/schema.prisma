@@ -74,46 +74,77 @@ enum DocumentCategory {
   DOCUMENT
 }
 
+enum LoanStatus {
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+enum ReimbursementCategory {
+  TRAVEL
+  MEDICAL
+  OTHER
+}
+
+enum ReimbursementStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+}
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // One row per SMB customer of this SaaS. Every other business record is
 // scoped to an Organization for tenant isolation.
 model Organization {
-  id                       String   @id @default(cuid())
-  name                     String
-  legalName                String?
+  id                           String   @id @default(cuid())
+  name                         String
+  legalName                    String?
   // Used on generated HR letters (offer/appointment/experience/relieving) —
   // blank renders as a placeholder there rather than blocking generation.
-  address                  String?
-  pan                      String?
-  tan                      String?
-  state                    String
-  pfRegistrationNo         String?
-  esiRegistrationNo        String?
+  address                      String?
+  pan                          String?
+  tan                          String?
+  state                        String
+  pfRegistrationNo             String?
+  esiRegistrationNo            String?
   // Voluntary registration is possible below the statutory employee-count
   // threshold, so this is an explicit admin toggle rather than derived from
   // headcount.
-  pfApplicable             Boolean  @default(true)
-  esiApplicable            Boolean  @default(true)
-  financialYearStartMonth  Int      @default(4)
+  pfApplicable                 Boolean  @default(true)
+  esiApplicable                Boolean  @default(true)
+  financialYearStartMonth      Int      @default(4)
   // Null for self-service /signup orgs; set when provisioned from the
   // platform admin console instead.
-  createdByPlatformAdminId String?
+  createdByPlatformAdminId     String?
   // Off by default so an org doesn't get surprise emails/costs until HR
   // opts in. Manual "Email payslip" sends ignore this toggle entirely.
-  payslipEmailEnabled      Boolean  @default(false)
+  payslipEmailEnabled          Boolean  @default(false)
   // Link to a publicly-viewable image (e.g. a Google Drive "anyone with the
   // link" share, auto-rewritten to a direct-view URL by
   // src/lib/logoUrl.ts) — not an uploaded file, see that module's comment.
-  logoUrl                  String?
+  logoUrl                      String?
   // Off by default so no org sees a surprise pay change until they opt in,
   // same philosophy as payslipEmailEnabled above. See src/lib/payrollEngine.ts.
-  overtimeAutoCalculateEnabled Boolean @default(false)
-  standardHoursPerDay          Decimal @default(8)
-  overtimeRateMultiplier       Decimal @default(2)
+  overtimeAutoCalculateEnabled Boolean  @default(false)
+  standardHoursPerDay          Decimal  @default(8)
+  overtimeRateMultiplier       Decimal  @default(2)
   // Off by default — hides all store/location UI (Settings, employee/HR
   // assignment, dashboard by-store stats, bulk-upload store column) for the
   // majority of orgs that operate from a single location.
-  multiLocationEnabled     Boolean  @default(false)
-  createdAt                DateTime @default(now())
+  multiLocationEnabled         Boolean  @default(false)
+  createdAt                    DateTime @default(now())
 
   users                  User[]
   employees              Employee[]
@@ -125,7 +156,10 @@ model Organization {
   certificates           Certificate[]
   companyDocuments       CompanyDocument[]
   stores                 Store[]
-  createdByPlatformAdmin PlatformAdmin?    @relation(fields: [createdByPlatformAdminId], references: [id])
+  loans                  Loan[]
+  reimbursementClaims    ReimbursementClaim[]
+  leaveRequests          LeaveRequest[]
+  createdByPlatformAdmin PlatformAdmin?       @relation(fields: [createdByPlatformAdminId], references: [id])
 
   @@index([state])
 }
@@ -177,58 +211,76 @@ model User {
   storeId      String?
   createdAt    DateTime @default(now())
 
-  organization       Organization      @relation(fields: [orgId], references: [id])
-  employee           Employee?         @relation(fields: [employeeId], references: [id])
-  store              Store?            @relation(fields: [storeId], references: [id])
-  requestedApprovals ApprovalRequest[] @relation("RequestedApprovals")
-  reviewedApprovals  ApprovalRequest[] @relation("ReviewedApprovals")
+  organization        Organization         @relation(fields: [orgId], references: [id])
+  employee            Employee?            @relation(fields: [employeeId], references: [id])
+  store               Store?               @relation(fields: [storeId], references: [id])
+  requestedApprovals  ApprovalRequest[]    @relation("RequestedApprovals")
+  reviewedApprovals   ApprovalRequest[]    @relation("ReviewedApprovals")
+  passwordResetTokens PasswordResetToken[]
 
   @@index([orgId])
 }
 
+// A single-use, expiring token for the self-service "forgot password" flow
+// (see requestPasswordReset/resetPassword in authActions.ts). Emailed via
+// sendMail — the email itself doesn't confirm whether the address is a real
+// account, to avoid leaking which emails are registered.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
 model Employee {
-  id               String           @id @default(cuid())
-  orgId            String
-  employeeCode     String
-  name             String
-  dob              DateTime?
-  gender           String?
-  doj              DateTime
+  id                        String           @id @default(cuid())
+  orgId                     String
+  employeeCode              String
+  name                      String
+  dob                       DateTime?
+  gender                    String?
+  doj                       DateTime
   // Set at exit — required before the experience/relieving letters can be
   // generated (see src/lib/hrLetters.ts).
-  dol              DateTime?
+  dol                       DateTime?
   // Only needed to create a self-service login (see User.employeeId) — not
   // used for payroll calculation.
-  email            String?
-  pan              String?
-  uan              String?
+  email                     String?
+  pan                       String?
+  uan                       String?
   // ESIC Insured Person (IP) number.
-  esiNumber        String?
+  esiNumber                 String?
   // Maharashtra Labour Welfare Fund labour identification number.
-  mlwfIdNumber     String?
-  bankAccountNo    String?
-  bankIfsc         String?
+  mlwfIdNumber              String?
+  bankAccountNo             String?
+  bankIfsc                  String?
   // Drives which PTSlab applies and which org LeavePolicy is shown.
-  state            String
-  pfApplicable     Boolean          @default(true)
-  esiApplicable    Boolean          @default(true)
+  state                     String
+  pfApplicable              Boolean          @default(true)
+  esiApplicable             Boolean          @default(true)
   // Per-employee PT opt-out, mirroring pfApplicable/esiApplicable above.
-  ptApplicable     Boolean          @default(true)
-  status           EmployeeStatus   @default(ACTIVE)
+  ptApplicable              Boolean          @default(true)
+  status                    EmployeeStatus   @default(ACTIVE)
   // Used on generated HR letters — "appointed as ___".
-  designation      String?
-  employmentStage  EmploymentStage  @default(PROBATION)
+  designation               String?
+  employmentStage           EmploymentStage  @default(PROBATION)
   // Relevant only while employmentStage=PROBATION.
-  probationEndDate DateTime?
-  employmentBasis  EmploymentBasis  @default(PERMANENT)
-  employeeCategory EmployeeCategory @default(NON_MANAGERIAL)
+  probationEndDate          DateTime?
+  employmentBasis           EmploymentBasis  @default(PERMANENT)
+  employeeCategory          EmployeeCategory @default(NON_MANAGERIAL)
   // MONTHLY = standard calendar-proration pay (existing behavior).
   // HOURLY_ATTENDANCE = still a monthly Basic, but with a free-leave
   // allowance before excessLeaveDailyDeduction kicks in on Basic only.
   // WAGE_BASED = no fixed monthly salary at all — gross pay each run is
   // wageRate × (hours or days actually worked, from Attendance), per
   // wageRateType. See src/lib/payrollEngine.ts.
-  payMode                   PayMode  @default(MONTHLY)
+  payMode                   PayMode          @default(MONTHLY)
   shiftHoursPerDay          Decimal?
   freeLeaveDaysPerMonth     Int?
   // Rupee deduction from Basic per day of absence beyond freeLeaveDaysPerMonth.
@@ -238,18 +290,21 @@ model Employee {
   wageRate                  Decimal?
   // Which store/centre this employee belongs to — only meaningful when the
   // org has multiLocationEnabled. See src/app/(app)/settings/page.tsx.
-  storeId          String?
-  createdAt        DateTime         @default(now())
+  storeId                   String?
+  createdAt                 DateTime         @default(now())
 
-  organization      Organization      @relation(fields: [orgId], references: [id])
-  salaryStructures  SalaryStructure[]
-  taxDeclarations   TaxDeclaration[]
-  payslipLines      PayslipLine[]
-  payrollAdjustments PayrollAdjustment[]
-  attendances       Attendance[]
-  loginUser         User?
-  visibleDocuments  CompanyDocument[]
-  store             Store?            @relation(fields: [storeId], references: [id])
+  organization        Organization         @relation(fields: [orgId], references: [id])
+  salaryStructures    SalaryStructure[]
+  taxDeclarations     TaxDeclaration[]
+  payslipLines        PayslipLine[]
+  payrollAdjustments  PayrollAdjustment[]
+  attendances         Attendance[]
+  loginUser           User?
+  visibleDocuments    CompanyDocument[]
+  store               Store?               @relation(fields: [storeId], references: [id])
+  loans               Loan[]
+  reimbursementClaims ReimbursementClaim[]
+  leaveRequests       LeaveRequest[]
 
   @@unique([orgId, employeeCode])
   @@index([orgId])
@@ -315,9 +370,9 @@ model PayrollRun {
   createdAt   DateTime         @default(now())
 
   organization       Organization        @relation(fields: [orgId], references: [id])
-  payslipLines        PayslipLine[]
-  caExportBatches     CAExportBatch[]
-  payrollAdjustments  PayrollAdjustment[]
+  payslipLines       PayslipLine[]
+  caExportBatches    CAExportBatch[]
+  payrollAdjustments PayrollAdjustment[]
 
   @@unique([orgId, month, year])
   @@index([orgId])
@@ -341,12 +396,109 @@ model PayrollAdjustment {
   name         String
   amount       Decimal
   type         AdjustmentType
+  // Set when this row was auto-generated as a month's EMI for an active Loan
+  // (see applyActiveLoanEmis in payrollActions.ts) rather than entered
+  // manually — lets copyFromPreviousRun skip re-copying it (loans regenerate
+  // their own EMI each run) and lets the Loan's repaid/outstanding balance
+  // be derived by summing these rows on FINALIZED runs only, instead of a
+  // separately-maintained counter that could drift out of sync.
+  loanId       String?
   createdAt    DateTime       @default(now())
 
-  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id])
-  employee   Employee   @relation(fields: [employeeId], references: [id])
+  payrollRun         PayrollRun          @relation(fields: [payrollRunId], references: [id])
+  employee           Employee            @relation(fields: [employeeId], references: [id])
+  loan               Loan?               @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  // No FK here — the FK lives on ReimbursementClaim.payrollAdjustmentId
+  // (a claim maps to at most one adjustment). See removePayrollAdjustment,
+  // which reverts the claim to APPROVED before deleting this row.
+  reimbursementClaim ReimbursementClaim?
 
   @@index([payrollRunId])
+  @@index([loanId])
+}
+
+// A fixed-EMI loan/advance given to an employee. The remaining balance is
+// deliberately NOT a stored counter — it's derived on read by summing this
+// loan's PayrollAdjustment rows on FINALIZED runs only (see
+// src/lib/loans.ts), the same "frozen snapshot" philosophy as PayslipLine:
+// a Draft run's EMI adjustment doesn't count against the balance until
+// finalized, and there's nothing to reconcile if a Draft's EMI row is
+// edited or removed before finalizing.
+model Loan {
+  id              String     @id @default(cuid())
+  orgId           String
+  employeeId      String
+  name            String
+  principalAmount Decimal
+  emiAmount       Decimal
+  status          LoanStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now())
+
+  organization Organization        @relation(fields: [orgId], references: [id])
+  employee     Employee            @relation(fields: [employeeId], references: [id])
+  adjustments  PayrollAdjustment[]
+
+  @@index([orgId])
+  @@index([employeeId])
+}
+
+// An employee-submitted travel/medical/other expense claim. Approved claims
+// sit unpaid until HR explicitly adds one to a Draft payroll run (creating a
+// normal EARNING PayrollAdjustment, same treatment as any other one-off —
+// excluded from PF/ESI wage base), at which point the claim is marked PAID
+// and linked to that adjustment. receiptUrl is a pasted link (e.g. a Drive
+// share), not an uploaded file — same pattern as CompanyDocument.url.
+model ReimbursementClaim {
+  id                  String                @id @default(cuid())
+  orgId               String
+  employeeId          String
+  category            ReimbursementCategory
+  amount              Decimal
+  description         String?
+  receiptUrl          String?
+  status              ReimbursementStatus   @default(PENDING)
+  reviewNote          String?
+  reviewedById        String?
+  reviewedAt          DateTime?
+  payrollAdjustmentId String?               @unique
+  createdAt           DateTime              @default(now())
+
+  organization      Organization       @relation(fields: [orgId], references: [id])
+  employee          Employee           @relation(fields: [employeeId], references: [id])
+  payrollAdjustment PayrollAdjustment? @relation(fields: [payrollAdjustmentId], references: [id])
+
+  @@index([orgId, status])
+  @@index([employeeId])
+}
+
+// An employee-submitted leave request against the org's LeavePolicy
+// entitlement. Approving here is a record of the decision only — it does
+// NOT touch Attendance or payroll (this app has no day-by-day leave-vs-work
+// calendar; HOURLY_ATTENDANCE proration already runs off the separate
+// Attendance import). "Leave taken" for the balance shown to the employee
+// is derived by summing APPROVED requests falling in the current calendar
+// year (a simplification — see LeavePolicy's own comment about entitlement
+// not being FY-aware either).
+model LeaveRequest {
+  id           String             @id @default(cuid())
+  orgId        String
+  employeeId   String
+  type         LeaveType
+  fromDate     DateTime
+  toDate       DateTime
+  days         Decimal
+  reason       String?
+  status       LeaveRequestStatus @default(PENDING)
+  reviewNote   String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime           @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+
+  @@index([orgId, status])
+  @@index([employeeId])
 }
 
 // Immutable once the parent run is finalized — corrections happen via a new
@@ -354,41 +506,41 @@ model PayrollAdjustment {
 // DRAFT — see revertPayrollRunToDraft — which is a deliberate, warned
 // exception to that rule, not silent editing.)
 model PayslipLine {
-  id            String   @id @default(cuid())
-  payrollRunId  String
-  employeeId    String
-  daysInMonth   Int
-  daysPaid      Decimal
+  id                  String   @id @default(cuid())
+  payrollRunId        String
+  employeeId          String
+  daysInMonth         Int
+  daysPaid            Decimal
   // Full earnings breakup at the time of the run ({ basic, hra, ... }).
-  earnings      Json
-  grossEarnings Decimal
-  pfWages       Decimal
-  pfEmployee    Decimal
-  pfEmployer    Decimal
-  pfEps         Decimal
-  pfEdli        Decimal
-  esiWages      Decimal
-  esiEmployee   Decimal
-  esiEmployer   Decimal
-  ptAmount      Decimal
-  tdsAmount     Decimal
+  earnings            Json
+  grossEarnings       Decimal
+  pfWages             Decimal
+  pfEmployee          Decimal
+  pfEmployer          Decimal
+  pfEps               Decimal
+  pfEdli              Decimal
+  esiWages            Decimal
+  esiEmployee         Decimal
+  esiEmployer         Decimal
+  ptAmount            Decimal
+  tdsAmount           Decimal
   // Rupee amount deducted from Basic for HOURLY_ATTENDANCE employees whose
   // absences exceeded their free-leave allowance that month. Zero for
   // MONTHLY employees. Recorded here (rather than only in `earnings`) so the
   // payslip PDF can show it as an explicit, transparent line.
-  attendanceDeduction Decimal @default(0)
+  attendanceDeduction Decimal  @default(0)
   // Auto-calculated overtime pay (see src/lib/payrollEngine.ts) — zero
   // unless the org has overtimeAutoCalculateEnabled on. Stored separately
   // (not folded into grossEarnings) so PF/ESI wage-base figures elsewhere
   // stay base-earnings-only; included in netPay directly.
-  overtimeAmount Decimal @default(0)
+  overtimeAmount      Decimal  @default(0)
   // Signed net total of this run's PayrollAdjustment rows for this employee
   // (EARNING minus DEDUCTION) at the time this line was last computed.
   // Excluded from PF/ESI wage-base figures, same reasoning as overtimeAmount
   // above. The itemized list is folded into `earnings` for full detail.
-  adjustmentsAmount Decimal @default(0)
-  netPay        Decimal
-  createdAt     DateTime @default(now())
+  adjustmentsAmount   Decimal  @default(0)
+  netPay              Decimal
+  createdAt           DateTime @default(now())
 
   payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id])
   employee   Employee   @relation(fields: [employeeId], references: [id])
@@ -477,16 +629,16 @@ model CompanyDocument {
 // src/lib/payrollEngine.ts. Re-uploading a file upserts on
 // (employeeId, date), so corrections are just a re-upload.
 model Attendance {
-  id         String   @id @default(cuid())
-  orgId      String
-  employeeId String
-  date       DateTime
-  present    Boolean
+  id          String   @id @default(cuid())
+  orgId       String
+  employeeId  String
+  date        DateTime
+  present     Boolean
   // Only populated/used for WAGE_BASED employees on HOURLY rate type — null
   // for everyone else (present/absent alone is enough for HOURLY_ATTENDANCE
   // and for DAILY-rate wage employees).
   hoursWorked Decimal?
-  createdAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id])
   employee     Employee     @relation(fields: [employeeId], references: [id])

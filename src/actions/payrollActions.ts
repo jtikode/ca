@@ -19,7 +19,7 @@ async function getAdjustments(payrollRunId: string, employeeId: string): Promise
 // should change is the adjustment total. Preserves whatever days-paid is
 // already on the line (e.g. a prior manual partial-month edit) instead of
 // resetting it back to a full month, same reasoning as recomputeRun below.
-async function recomputeOneEmployeeLine(payrollRunId: string, employeeId: string, orgId: string) {
+export async function recomputeOneEmployeeLine(payrollRunId: string, employeeId: string, orgId: string) {
   const [run, employee, existingLine] = await Promise.all([
     db.payrollRun.findFirstOrThrow({ where: { id: payrollRunId } }),
     db.employee.findFirstOrThrow({ where: { id: employeeId } }),
@@ -71,6 +71,10 @@ export async function createPayrollRun(_prevState: ActionResult | null, formData
     ? await copyFromPreviousRun(run.id, session.orgId, parsed.data.month, parsed.data.year)
     : undefined;
 
+  // Always applied, independent of "copy from last month" — an active loan
+  // regenerates its own EMI adjustment every run rather than being copied.
+  await applyActiveLoanEmis(run.id, session.orgId);
+
   await recomputeRun(run.id, session.orgId, daysPaidOverrides);
 
   redirect(`/payroll/${run.id}`);
@@ -93,9 +97,22 @@ async function copyFromPreviousRun(
   });
   if (!previousRun) return new Map();
 
-  if (previousRun.payrollAdjustments.length > 0) {
+  // Loan EMIs regenerate themselves each run (applyActiveLoanEmis) and a
+  // paid reimbursement is a one-off by definition — copying either forward
+  // would double-charge/double-pay, so only plain manual adjustments carry
+  // over here.
+  const reimbursedIds = new Set(
+    (
+      await db.reimbursementClaim.findMany({
+        where: { payrollAdjustmentId: { in: previousRun.payrollAdjustments.map((a) => a.id) } },
+        select: { payrollAdjustmentId: true },
+      })
+    ).map((r) => r.payrollAdjustmentId),
+  );
+  const plainAdjustments = previousRun.payrollAdjustments.filter((a) => !a.loanId && !reimbursedIds.has(a.id));
+  if (plainAdjustments.length > 0) {
     await db.payrollAdjustment.createMany({
-      data: previousRun.payrollAdjustments.map((a) => ({
+      data: plainAdjustments.map((a) => ({
         payrollRunId: newRunId,
         employeeId: a.employeeId,
         name: a.name,
@@ -118,6 +135,41 @@ async function copyFromPreviousRun(
     overrides.set(line.employeeId, Math.round(ratio * newTotalDays * 2) / 2);
   }
   return overrides;
+}
+
+// Creates this month's EMI adjustment for every active loan whose employee
+// is still active — skipped for an employee no longer active since
+// recomputeRun below only ever processes active employees, which would
+// otherwise leave the adjustment orphaned (created but never folded into a
+// payslip line). A loan whose balance has already reached zero (e.g. the
+// last EMI landed unevenly) is closed instead of charging further.
+async function applyActiveLoanEmis(payrollRunId: string, orgId: string) {
+  const activeLoans = await db.loan.findMany({
+    where: { orgId, status: "ACTIVE", employee: { status: "ACTIVE" } },
+  });
+
+  for (const loan of activeLoans) {
+    const paid = await db.payrollAdjustment.aggregate({
+      where: { loanId: loan.id, payrollRun: { status: "FINALIZED" } },
+      _sum: { amount: true },
+    });
+    const outstanding = Number(loan.principalAmount) - Number(paid._sum.amount ?? 0);
+    if (outstanding <= 0) {
+      await db.loan.update({ where: { id: loan.id }, data: { status: "CLOSED" } });
+      continue;
+    }
+
+    await db.payrollAdjustment.create({
+      data: {
+        payrollRunId,
+        employeeId: loan.employeeId,
+        name: `Loan EMI — ${loan.name}`,
+        amount: Math.min(Number(loan.emiAmount), outstanding),
+        type: "DEDUCTION",
+        loanId: loan.id,
+      },
+    });
+  }
 }
 
 async function recomputeRun(payrollRunId: string, orgId: string, daysPaidOverrides?: Map<string, number>) {
@@ -282,9 +334,20 @@ export async function removePayrollAdjustment(adjustmentId: string): Promise<voi
 
   const adjustment = await db.payrollAdjustment.findFirst({
     where: { id: adjustmentId, payrollRun: { orgId: session.orgId } },
-    include: { payrollRun: true },
+    include: { payrollRun: true, reimbursementClaim: true },
   });
   if (!adjustment || adjustment.payrollRun.status === "FINALIZED") return;
+
+  // A reimbursement claim marked PAID via this adjustment reverts to
+  // APPROVED-but-unpaid instead of being deleted along with it — the claim
+  // itself (and HR's approval decision) survives; only "it's on this run"
+  // does not.
+  if (adjustment.reimbursementClaim) {
+    await db.reimbursementClaim.update({
+      where: { id: adjustment.reimbursementClaim.id },
+      data: { status: "APPROVED", payrollAdjustmentId: null },
+    });
+  }
 
   await db.payrollAdjustment.delete({ where: { id: adjustmentId } });
 

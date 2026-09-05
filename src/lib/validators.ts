@@ -231,4 +231,54 @@ export const ctcCalculatorSchema = z.object({
   fieldDaysPerMonth: optionalNumber,
 });
 
+// A fixed-EMI loan/advance for one employee — see Loan in prisma/schema.prisma.
+export const loanSchema = z.object({
+  employeeId: z.string().min(1, "Select an employee."),
+  name: z.string().min(1, "Give this loan a short name (e.g. Personal advance)."),
+  principalAmount: z.coerce.number().positive("Principal must be greater than 0."),
+  emiAmount: z.coerce.number().positive("EMI must be greater than 0."),
+});
+
+export const REIMBURSEMENT_CATEGORIES = ["TRAVEL", "MEDICAL", "OTHER"] as const;
+
+export const reimbursementClaimSchema = z.object({
+  category: z.enum(REIMBURSEMENT_CATEGORIES),
+  amount: z.coerce.number().positive("Amount must be greater than 0."),
+  description: optionalString,
+  receiptUrl: z.preprocess(emptyToUndefined, z.string().url("Enter a valid URL.").optional()),
+});
+
+export const reimbursementReviewSchema = z.object({
+  decision: z.enum(["APPROVED", "REJECTED"]),
+  reviewNote: optionalString,
+});
+
+export const LEAVE_TYPES = ["CASUAL", "SICK", "EARNED"] as const;
+
+export const leaveRequestSchema = z
+  .object({
+    type: z.enum(LEAVE_TYPES),
+    fromDate: z.coerce.date({ error: "Enter a valid start date." }),
+    toDate: z.coerce.date({ error: "Enter a valid end date." }),
+    reason: optionalString,
+  })
+  .refine((v) => v.toDate >= v.fromDate, { message: "End date can't be before the start date.", path: ["toDate"] });
+
+export const leaveReviewSchema = z.object({
+  decision: z.enum(["APPROVED", "REJECTED"]),
+  reviewNote: optionalString,
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email("Enter a valid email."),
+});
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1),
+    password: z.string().min(8, "Password must be at least 8 characters."),
+    confirmPassword: z.string().min(1, "Confirm your new password."),
+  })
+  .refine((v) => v.password === v.confirmPassword, { message: "Passwords don't match.", path: ["confirmPassword"] });
+
 export { optionalString, optionalNumber, booleanFromCheckbox };

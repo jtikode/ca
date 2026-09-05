@@ -2,16 +2,30 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { LoginForm } from "@/components/auth/LoginForm";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reset?: string }>;
+}) {
+  const { reset } = await searchParams;
+
   return (
     <div className="flex flex-1 items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-4">
         <h1 className="text-center text-2xl font-bold text-white">
           Tim<span className="text-amber-400">Hr</span>
         </h1>
+        {reset === "success" && (
+          <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-center text-sm font-medium text-emerald-400">
+            Password reset — sign in with your new password.
+          </p>
+        )}
         <Card>
           <h2 className="mb-4 text-lg font-bold text-white">Sign in</h2>
           <LoginForm />
+          <Link href="/forgot-password" className="mt-3 inline-block text-sm text-slate-400 hover:text-amber-400 hover:underline">
+            Forgot password?
+          </Link>
         </Card>
         <p className="text-center text-sm text-slate-400">
           New here?{" "}

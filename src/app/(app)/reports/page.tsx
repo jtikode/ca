@@ -10,9 +10,38 @@ import {
   financialYearAndQuarterFor,
   monthsInFinancialYear,
   quarterLabel,
+  MONTH_NAMES,
   type Quarter,
+  type MonthYear,
 } from "@/lib/dates";
 import { aggregateOrgPayslipLines } from "@/lib/exports/periodAggregation";
+
+interface HeadcountRow {
+  period: MonthYear;
+  headcount: number;
+  leavers: number;
+}
+
+// Derived straight from Employee.doj/dol — no separate headcount-history
+// table. An employee counts in a month if they'd joined by its last day and
+// (if they've left at all) hadn't left before its first day; "leavers" is
+// how many left during that specific month.
+function headcountAndAttrition(
+  employees: { doj: Date; dol: Date | null }[],
+  periods: MonthYear[],
+): HeadcountRow[] {
+  return periods.map((period) => {
+    const monthStart = new Date(period.year, period.month - 1, 1);
+    const monthEnd = new Date(period.year, period.month, 0);
+    let headcount = 0;
+    let leavers = 0;
+    for (const e of employees) {
+      if (e.doj <= monthEnd && (!e.dol || e.dol >= monthStart)) headcount += 1;
+      if (e.dol && e.dol >= monthStart && e.dol <= monthEnd) leavers += 1;
+    }
+    return { period, headcount, leavers };
+  });
+}
 
 function recentFinancialYears(current: string): string[] {
   const startYear = Number(current.slice(0, 4));
@@ -37,15 +66,18 @@ export default async function ReportsPage({
   const quarterNum = Number(params.quarter);
   const quarter = ([1, 2, 3, 4].includes(quarterNum) ? quarterNum : defaultQuarter) as Quarter;
 
-  const [org, aggregation] = await Promise.all([
+  const periods = monthsInFinancialYear(fy);
+  const [org, aggregation, employeesForHeadcount] = await Promise.all([
     db.organization.findUniqueOrThrow({ where: { id: session.orgId } }),
-    aggregateOrgPayslipLines(session.orgId, monthsInFinancialYear(fy)),
+    aggregateOrgPayslipLines(session.orgId, periods),
+    db.employee.findMany({ where: { orgId: session.orgId }, select: { doj: true, dol: true } }),
   ]);
 
   const hasPanTan = Boolean(org.pan && org.tan);
   const employeesWithPay = Array.from(aggregation.employeeTotals.values())
     .filter((t) => t.grossEarnings > 0)
     .sort((a, b) => a.employee.name.localeCompare(b.employee.name));
+  const headcountRows = headcountAndAttrition(employeesForHeadcount, periods);
 
   return (
     <div className="space-y-6">
@@ -73,6 +105,30 @@ export default async function ReportsPage({
           </Field>
           <Button type="submit">View</Button>
         </form>
+      </Card>
+
+      <Card>
+        <h2 className="mb-1 text-lg font-bold text-white">Complete CA package</h2>
+        <p className="mb-4 text-sm text-slate-400">
+          Everything below — Form 16 Part B for every employee, Form 24Q for all four quarters, and the annual
+          PF/ESI/PT summary — bundled into one ZIP for {fy}.
+        </p>
+        {hasPanTan ? (
+          <a
+            href={`/api/reports/ca-package?fy=${fy}`}
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-amber-500 px-4 text-sm font-semibold text-slate-950 shadow-[0_0_20px_-6px_rgba(245,158,11,0.5)] transition hover:bg-amber-400"
+          >
+            Download complete package (ZIP)
+          </a>
+        ) : (
+          <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-400">
+            Add your company&apos;s PAN and TAN in{" "}
+            <Link href="/settings" className="underline">
+              Settings
+            </Link>{" "}
+            first.
+          </p>
+        )}
       </Card>
 
       <Card>
@@ -154,6 +210,34 @@ export default async function ReportsPage({
         >
           Download {fy} Excel
         </a>
+      </Card>
+
+      <Card className="overflow-x-auto">
+        <h2 className="mb-1 text-lg font-bold text-white">Headcount &amp; Attrition</h2>
+        <p className="mb-4 text-sm text-slate-400">
+          Derived from date of joining and date of leaving for FY {fy}. Headcount is who was active as of each
+          month&apos;s end; attrition is who left during that month.
+        </p>
+        <table className="w-full min-w-[500px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-800 text-slate-500">
+              <th className="py-2 pr-4">Month</th>
+              <th className="py-2 pr-4">Headcount</th>
+              <th className="py-2 pr-4">Left this month</th>
+            </tr>
+          </thead>
+          <tbody>
+            {headcountRows.map((row) => (
+              <tr key={`${row.period.year}-${row.period.month}`} className="border-b border-slate-800 text-slate-300">
+                <td className="py-2 pr-4">
+                  {MONTH_NAMES[row.period.month - 1]} {row.period.year}
+                </td>
+                <td className="py-2 pr-4 font-semibold text-white">{row.headcount}</td>
+                <td className="py-2 pr-4">{row.leavers > 0 ? row.leavers : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </Card>
     </div>
   );
