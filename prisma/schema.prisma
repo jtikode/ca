@@ -549,10 +549,13 @@ model PayslipLine {
   @@index([payrollRunId])
 }
 
-// Admin-editable, state-specific Professional Tax slabs. PF (12%/12% split
-// into EPF/EPS/EDLI/admin) and ESI (0.75%/3.25% up to the wage ceiling)
-// rates change rarely via government notification and are kept as
-// versioned constants in code instead of a table — see src/lib/statutory.ts.
+// Admin-editable, state-specific Professional Tax slabs. PF (employee 12%;
+// employer 12% EPS+EPF split + 0.5% EDLI, actually remitted and stored
+// below as pfEmployer/pfEps/pfEdli — plus a budgeting-only 0.5% admin
+// charge that brings employer PF *cost* to 13%, see calculatePF's
+// pfAdminCharge in src/lib/statutory.ts) and ESI (0.75%/3.25% up to the
+// wage ceiling) rates change rarely via government notification and are
+// kept as versioned constants in code instead of a table.
 model PTSlab {
   id            String   @id @default(cuid())
   state         String

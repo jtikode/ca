@@ -58,14 +58,14 @@ export async function calculateCtc(_prevState: CtcResult | null, formData: FormD
   const fieldAllowanceTotal = (parsed.data.dailyFieldAllowance ?? 0) * (parsed.data.fieldDaysPerMonth ?? 0);
 
   const employerMonthlyCost =
-    grossEarnings + pf.pfEmployer + pf.pfEps + pf.pfEdli + esi.esiEmployer + fieldAllowanceTotal;
+    grossEarnings + pf.pfEmployer + pf.pfEps + pf.pfEdli + pf.pfAdminCharge + esi.esiEmployer + fieldAllowanceTotal;
   const employeeTakeHome = grossEarnings + fieldAllowanceTotal - pf.pfEmployee - esi.esiEmployee - ptAmount;
 
   return {
     ok: true,
     grossEarnings,
     pfEmployee: pf.pfEmployee,
-    pfEmployer: pf.pfEmployer + pf.pfEps + pf.pfEdli,
+    pfEmployer: pf.pfEmployer + pf.pfEps + pf.pfEdli + pf.pfAdminCharge,
     esiEmployee: esi.esiEmployee,
     esiEmployer: esi.esiEmployer,
     ptAmount,

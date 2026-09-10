@@ -100,7 +100,7 @@ export function CalculatorForm() {
                 <span className="font-semibold text-white">{inr(state.grossEarnings!)}</span>
               </div>
               <div className="flex justify-between text-slate-300">
-                <span>Employer PF (incl. EPS, EDLI)</span>
+                <span>Employer PF (incl. EPS, EDLI, admin charge)</span>
                 <span className="font-semibold text-white">{inr(state.pfEmployer!)}</span>
               </div>
               <div className="flex justify-between text-slate-300">

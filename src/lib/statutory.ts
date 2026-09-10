@@ -10,6 +10,10 @@ export const PF_EPS_RATE = 0.0833;
 export const PF_EPS_MAX_MONTHLY = 1250; // 8.33% of the 15,000 ceiling, rounded
 export const PF_EMPLOYER_TOTAL_RATE = 0.12;
 export const PF_EDLI_RATE = 0.005;
+// Employer-only administrative charge, on top of the 12% EPS+EPF split and
+// 0.5% EDLI — brings the employer's total PF-related cost to the commonly
+// quoted 13% of PF wages (12% + 0.5% EDLI + 0.5% admin charge).
+export const PF_ADMIN_CHARGE_RATE = 0.005;
 
 export const ESI_WAGE_CEILING = 21000;
 export const ESI_EMPLOYEE_RATE = 0.0075;
@@ -64,9 +68,19 @@ export function grossFromEarnings(e: EarningsBreakup): number {
 export interface PFResult {
   pfWages: number;
   pfEmployee: number;
+  /** Pure EPF employer share (12% total minus the EPS carve-out) — this,
+   * along with pfEps/pfEdli, is what actually gets remitted to EPFO and
+   * feeds the PF ECR export (src/lib/exports/ecr.ts) and statutory
+   * reports, so it's kept at the real statutory rate rather than including
+   * pfAdminCharge below. */
   pfEmployer: number;
   pfEps: number;
   pfEdli: number;
+  /** Not remitted anywhere — a budgeting-only figure so employer PF cost
+   * (pfEmployer + pfEps + pfEdli + pfAdminCharge) totals the commonly
+   * quoted 13%. Used by the CTC calculator; deliberately excluded from
+   * PayslipLine/statutory exports. */
+  pfAdminCharge: number;
 }
 
 /** PF wage basis is Basic + DA. Defaults to capping PF wages at the
@@ -74,7 +88,7 @@ export interface PFResult {
  * into voluntary higher contribution. */
 export function calculatePF(basicPlusDa: number, applicable: boolean): PFResult {
   if (!applicable) {
-    return { pfWages: 0, pfEmployee: 0, pfEmployer: 0, pfEps: 0, pfEdli: 0 };
+    return { pfWages: 0, pfEmployee: 0, pfEmployer: 0, pfEps: 0, pfEdli: 0, pfAdminCharge: 0 };
   }
 
   const pfWages = Math.min(basicPlusDa, PF_WAGE_CEILING);
@@ -83,8 +97,9 @@ export function calculatePF(basicPlusDa: number, applicable: boolean): PFResult 
   const employerTotal = round(pfWages * PF_EMPLOYER_TOTAL_RATE);
   const pfEmployer = employerTotal - pfEps;
   const pfEdli = round(pfWages * PF_EDLI_RATE);
+  const pfAdminCharge = round(pfWages * PF_ADMIN_CHARGE_RATE);
 
-  return { pfWages, pfEmployee, pfEmployer, pfEps, pfEdli };
+  return { pfWages, pfEmployee, pfEmployer, pfEps, pfEdli, pfAdminCharge };
 }
 
 export interface ESIResult {
