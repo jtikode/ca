@@ -38,9 +38,45 @@ export const PAY_MODES = ["MONTHLY", "HOURLY_ATTENDANCE", "WAGE_BASED"] as const
 export const WAGE_RATE_TYPES = ["HOURLY", "DAILY"] as const;
 export const DOCUMENT_CATEGORIES = ["TRAINING", "CHECKLIST", "DOCUMENT"] as const;
 
+export const CERTIFICATE_CATEGORIES = [
+  "PF_REGISTRATION",
+  "ESI_REGISTRATION",
+  "GST_REGISTRATION",
+  "SHOPS_ESTABLISHMENT",
+  "TRADE_LICENCE",
+  "OTHER",
+] as const;
+
+export const CERTIFICATE_CATEGORY_LABELS: Record<(typeof CERTIFICATE_CATEGORIES)[number], string> = {
+  PF_REGISTRATION: "PF registration",
+  ESI_REGISTRATION: "ESI registration",
+  GST_REGISTRATION: "GST registration",
+  SHOPS_ESTABLISHMENT: "Shops & Establishment licence",
+  TRADE_LICENCE: "Trade licence",
+  OTHER: "Other / custom",
+};
+
+export const CERTIFICATE_MAX_FILE_BYTES = 1 * 1024 * 1024; // 1MB
+const CERTIFICATE_ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+
+// The file input is optional — "Other/custom" certificates (and any
+// preset category) can be added with just a name and manually entered
+// expiry, exactly as before; a photo/scan is an addition, not a
+// requirement.
+const certificateFileSchema = z
+  .instanceof(File)
+  .optional()
+  .refine((f) => !f || f.size <= CERTIFICATE_MAX_FILE_BYTES, "Image must be 1MB or smaller.")
+  .refine(
+    (f) => !f || CERTIFICATE_ALLOWED_MIME_TYPES.includes(f.type),
+    "Only JPEG, PNG, WEBP, or HEIC images are accepted.",
+  );
+
 export const addCertificateSchema = z.object({
   name: z.string().min(1, "Certificate name is required."),
+  category: z.enum(CERTIFICATE_CATEGORIES).default("OTHER"),
   expiryDate: z.coerce.date({ message: "Enter a valid expiry date." }),
+  file: certificateFileSchema,
 });
 
 export const addDocumentSchema = z.object({

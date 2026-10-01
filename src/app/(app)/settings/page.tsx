@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/Card";
 import { OrganizationForm } from "@/components/settings/OrganizationForm";
 import { LeavePolicyForm } from "@/components/settings/LeavePolicyForm";
 import { CertificateForm } from "@/components/settings/CertificateForm";
+import { ShareCertificateButton } from "@/components/settings/ShareCertificateButton";
+import { CERTIFICATE_CATEGORY_LABELS } from "@/lib/validators";
 import { StoreForm } from "@/components/settings/StoreForm";
 import { leavePolicyDefaultsForState } from "@/lib/leavePolicyDefaults";
 import { deleteCertificate } from "@/actions/certificateActions";
@@ -20,6 +22,11 @@ export default async function SettingsPage() {
   const certificates = await db.certificate.findMany({
     where: { orgId: session.orgId },
     orderBy: { expiryDate: "asc" },
+    // fileData itself (the image bytes) is deliberately excluded — the
+    // list view only needs to know whether a file exists, via
+    // fileMimeType; the bytes are fetched on demand by
+    // /api/certificates/[id]/file.
+    select: { id: true, name: true, category: true, expiryDate: true, fileMimeType: true, fileName: true },
   });
   const stores = org.multiLocationEnabled
     ? await db.store.findMany({ where: { orgId: session.orgId }, orderBy: { name: "asc" } })
@@ -42,6 +49,7 @@ export default async function SettingsPage() {
             pfApplicable: org.pfApplicable,
             esiApplicable: org.esiApplicable,
             payslipEmailEnabled: org.payslipEmailEnabled,
+            complianceDigestEnabled: org.complianceDigestEnabled,
             logoUrl: org.logoUrl ?? "",
             overtimeAutoCalculateEnabled: org.overtimeAutoCalculateEnabled,
             standardHoursPerDay: Number(org.standardHoursPerDay),
@@ -93,26 +101,46 @@ export default async function SettingsPage() {
         </p>
         <CertificateForm />
         {certificates.length > 0 && (
-          <table className="mt-4 w-full min-w-[400px] text-left text-sm">
+          <table className="mt-4 w-full min-w-[560px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-800 text-slate-500">
                 <th className="py-2 pr-4">Name</th>
+                <th className="py-2 pr-4">Category</th>
                 <th className="py-2 pr-4">Expiry</th>
                 <th className="py-2 pr-4"></th>
+                <th className="py-2 pr-4">File</th>
                 <th className="py-2 pr-4"></th>
               </tr>
             </thead>
             <tbody>
               {certificates.map((cert) => {
                 const remaining = daysUntil(cert.expiryDate);
+                const fileUrl = `/api/certificates/${cert.id}/file`;
                 return (
                   <tr key={cert.id} className="border-b border-slate-800 text-slate-300">
                     <td className="py-2 pr-4 font-medium text-white">{cert.name}</td>
+                    <td className="py-2 pr-4 text-slate-400">{CERTIFICATE_CATEGORY_LABELS[cert.category]}</td>
                     <td className="py-2 pr-4">{cert.expiryDate.toLocaleDateString("en-IN")}</td>
                     <td className="py-2 pr-4">
                       <Badge tone={remaining <= 3 ? "danger" : remaining <= 10 ? "warning" : "success"}>
                         {remaining <= 0 ? "Expired" : `${remaining} day${remaining === 1 ? "" : "s"}`}
                       </Badge>
+                    </td>
+                    <td className="py-2 pr-4">
+                      {cert.fileMimeType ? (
+                        <div className="flex items-center gap-3">
+                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-amber-400 hover:underline">
+                            View
+                          </a>
+                          <ShareCertificateButton
+                            fileUrl={fileUrl}
+                            fileName={cert.fileName ?? `${cert.name}.jpg`}
+                            certificateName={cert.name}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-500">No photo</span>
+                      )}
                     </td>
                     <td className="py-2 pr-4">
                       <form action={deleteCertificate.bind(null, cert.id)}>

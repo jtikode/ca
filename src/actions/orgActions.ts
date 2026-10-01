@@ -22,6 +22,7 @@ export async function updateOrganization(_prevState: ActionResult | null, formDa
   const pfApplicable = formData.get("pfApplicable") === "on";
   const esiApplicable = formData.get("esiApplicable") === "on";
   const payslipEmailEnabled = formData.get("payslipEmailEnabled") === "on";
+  const complianceDigestEnabled = formData.get("complianceDigestEnabled") === "on";
   const logoUrlRaw = (formData.get("logoUrl") as string) || "";
   const logoUrl = logoUrlRaw ? normalizeLogoUrl(logoUrlRaw) : null;
   const overtimeAutoCalculateEnabled = formData.get("overtimeAutoCalculateEnabled") === "on";
@@ -41,6 +42,7 @@ export async function updateOrganization(_prevState: ActionResult | null, formDa
       pfApplicable,
       esiApplicable,
       payslipEmailEnabled,
+      complianceDigestEnabled,
       logoUrl,
       overtimeAutoCalculateEnabled,
       standardHoursPerDay,

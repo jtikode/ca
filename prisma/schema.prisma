@@ -108,7 +108,7 @@ enum LeaveRequestStatus {
 // One row per SMB customer of this SaaS. Every other business record is
 // scoped to an Organization for tenant isolation.
 model Organization {
-  id                           String   @id @default(cuid())
+  id                           String    @id @default(cuid())
   name                         String
   legalName                    String?
   // Used on generated HR letters (offer/appointment/experience/relieving) —
@@ -122,29 +122,38 @@ model Organization {
   // Voluntary registration is possible below the statutory employee-count
   // threshold, so this is an explicit admin toggle rather than derived from
   // headcount.
-  pfApplicable                 Boolean  @default(true)
-  esiApplicable                Boolean  @default(true)
-  financialYearStartMonth      Int      @default(4)
+  pfApplicable                 Boolean   @default(true)
+  esiApplicable                Boolean   @default(true)
+  financialYearStartMonth      Int       @default(4)
   // Null for self-service /signup orgs; set when provisioned from the
   // platform admin console instead.
   createdByPlatformAdminId     String?
   // Off by default so an org doesn't get surprise emails/costs until HR
   // opts in. Manual "Email payslip" sends ignore this toggle entirely.
-  payslipEmailEnabled          Boolean  @default(false)
+  payslipEmailEnabled          Boolean   @default(false)
+  // Off by default, same philosophy as payslipEmailEnabled — a weekly email
+  // (to every SUPERADMIN) summarizing detected compliance gaps and upcoming
+  // statutory deadlines, see src/lib/complianceDigest.ts. The in-app gap
+  // card on the dashboard shows regardless of this toggle.
+  complianceDigestEnabled      Boolean   @default(false)
+  // Set after each weekly digest send so the sweep (instrumentation.ts, or
+  // the manual /api/cron/compliance-digest trigger) knows which orgs are
+  // due — not a schedule itself, just "don't re-send before 7 days pass".
+  lastComplianceDigestSentAt   DateTime?
   // Link to a publicly-viewable image (e.g. a Google Drive "anyone with the
   // link" share, auto-rewritten to a direct-view URL by
   // src/lib/logoUrl.ts) — not an uploaded file, see that module's comment.
   logoUrl                      String?
   // Off by default so no org sees a surprise pay change until they opt in,
   // same philosophy as payslipEmailEnabled above. See src/lib/payrollEngine.ts.
-  overtimeAutoCalculateEnabled Boolean  @default(false)
-  standardHoursPerDay          Decimal  @default(8)
-  overtimeRateMultiplier       Decimal  @default(2)
+  overtimeAutoCalculateEnabled Boolean   @default(false)
+  standardHoursPerDay          Decimal   @default(8)
+  overtimeRateMultiplier       Decimal   @default(2)
   // Off by default — hides all store/location UI (Settings, employee/HR
   // assignment, dashboard by-store stats, bulk-upload store column) for the
   // majority of orgs that operate from a single location.
-  multiLocationEnabled         Boolean  @default(false)
-  createdAt                    DateTime @default(now())
+  multiLocationEnabled         Boolean   @default(false)
+  createdAt                    DateTime  @default(now())
 
   users                  User[]
   employees              Employee[]
@@ -594,12 +603,32 @@ model LeavePolicy {
 // Company-level (not per-employee) certificate/registration expiry tracker
 // — name and expiry date are filled in manually by HR, surfaced as dashboard
 // reminders. See src/app/(app)/dashboard/page.tsx.
+enum CertificateCategory {
+  PF_REGISTRATION
+  ESI_REGISTRATION
+  GST_REGISTRATION
+  SHOPS_ESTABLISHMENT
+  TRADE_LICENCE
+  OTHER
+}
+
+// Company-level certificate/registration expiry tracker. category is a
+// preset hint used for grouping and default naming — OTHER covers a fully
+// custom certificate, which still only needs a name and a manually entered
+// expiryDate (no file required). fileData/fileMimeType/fileName are
+// optional: a scanned/photographed copy of the certificate, stored inline
+// (not a separate object-storage bucket, since addCertificateSchema caps
+// uploads at 1MB) and served by /api/certificates/[id]/file.
 model Certificate {
-  id         String   @id @default(cuid())
-  orgId      String
-  name       String
-  expiryDate DateTime
-  createdAt  DateTime @default(now())
+  id           String              @id @default(cuid())
+  orgId        String
+  name         String
+  category     CertificateCategory @default(OTHER)
+  expiryDate   DateTime
+  fileData     Bytes?
+  fileMimeType String?
+  fileName     String?
+  createdAt    DateTime            @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id])
 

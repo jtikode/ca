@@ -20,7 +20,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PayrollCharts, type CostBreakdownSlice, type MonthlyTotal } from "@/components/dashboard/PayrollCharts";
 import { StatutoryWidget } from "@/components/dashboard/StatutoryWidget";
+import { ComplianceGapsWidget } from "@/components/dashboard/ComplianceGapsWidget";
 import { finalizePayrollRun } from "@/actions/payrollActions";
+import { detectComplianceGaps } from "@/lib/compliance";
 import {
   MONTH_NAMES,
   currentFinancialYear,
@@ -102,6 +104,8 @@ export default async function DashboardPage() {
     orderBy: { name: "asc" },
     select: { id: true, name: true, pfApplicable: true, esiApplicable: true },
   });
+
+  const complianceGaps = await detectComplianceGaps(session.orgId);
 
   const [latestFinalizedRun, recentFinalizedRuns] = await Promise.all([
     db.payrollRun.findFirst({
@@ -524,6 +528,8 @@ export default async function DashboardPage() {
               </Link>
             </Card>
           )}
+
+          <ComplianceGapsWidget gaps={complianceGaps} />
 
           <StatutoryWidget employees={statutoryEmployees} />
 

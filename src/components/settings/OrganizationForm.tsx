@@ -21,6 +21,7 @@ export function OrganizationForm({
     pfApplicable: boolean;
     esiApplicable: boolean;
     payslipEmailEnabled: boolean;
+    complianceDigestEnabled: boolean;
     logoUrl: string;
     overtimeAutoCalculateEnabled: boolean;
     standardHoursPerDay: number;
@@ -78,6 +79,15 @@ export function OrganizationForm({
             className="h-4 w-4"
           />
           Auto-email payslips when a run is finalized
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            name="complianceDigestEnabled"
+            defaultChecked={defaults.complianceDigestEnabled}
+            className="h-4 w-4"
+          />
+          Weekly compliance email (flagged gaps &amp; upcoming deadlines) to all Superadmins
         </label>
         <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
