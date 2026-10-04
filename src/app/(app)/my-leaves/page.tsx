@@ -16,10 +16,15 @@ export default async function MyLeavesPage() {
   const session = await requireSession(["EMPLOYEE"]);
   if (!session.employeeId) notFound();
 
-  const [employee, leavePolicy, requests] = await Promise.all([
+  const [employee, leavePolicy, requests, holidays] = await Promise.all([
     db.employee.findFirst({ where: { id: session.employeeId, orgId: session.orgId }, select: { state: true } }),
     db.leavePolicy.findUnique({ where: { orgId: session.orgId } }),
     db.leaveRequest.findMany({ where: { employeeId: session.employeeId }, orderBy: { createdAt: "desc" } }),
+    db.holiday.findMany({
+      where: { orgId: session.orgId, date: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } },
+      orderBy: { date: "asc" },
+      take: 8,
+    }),
   ]);
   if (!employee) notFound();
 
@@ -64,6 +69,22 @@ export default async function MyLeavesPage() {
               </div>
             ))}
           </div>
+        </Card>
+      )}
+
+      {holidays.length > 0 && (
+        <Card>
+          <h2 className="mb-3 text-lg font-bold text-white">Upcoming holidays</h2>
+          <ul className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+            {holidays.map((h) => (
+              <li key={h.id} className="flex items-center justify-between rounded-lg border border-slate-800 px-3 py-2">
+                <span className="font-medium text-white">{h.name}</span>
+                <span className="text-slate-400">
+                  {h.date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+                </span>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 

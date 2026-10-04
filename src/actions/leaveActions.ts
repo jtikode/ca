@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { recordAudit } from "@/lib/audit";
 import { assertSession } from "@/lib/permissions";
 import { leaveRequestSchema, leaveReviewSchema } from "@/lib/validators";
 
@@ -72,6 +73,8 @@ export async function reviewLeaveRequest(
       reviewedAt: new Date(),
     },
   });
+
+  await recordAudit(session, `LEAVE_${parsed.data.decision}`, "LeaveRequest", `${parsed.data.decision === "APPROVED" ? "Approved" : "Rejected"} a ${request.type.toLowerCase()} leave request`, requestId);
 
   revalidatePath("/leaves");
   revalidatePath("/my-leaves");

@@ -12,6 +12,7 @@ const CATEGORY_LABELS: Record<(typeof DOCUMENT_CATEGORIES)[number], string> = {
   TRAINING: "Training material",
   CHECKLIST: "Checklist",
   DOCUMENT: "Document",
+  POLICY: "Policy (employees must acknowledge)",
 };
 
 const initialState: ActionResult = { ok: false, error: undefined };

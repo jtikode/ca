@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { recordAudit } from "@/lib/audit";
 import { assertSession } from "@/lib/permissions";
 import { payrollRunInputSchema, payrollAdjustmentSchema } from "@/lib/validators";
 import { computePayslipLine, type AdjustmentInput } from "@/lib/payrollEngine";
@@ -257,6 +258,7 @@ export async function finalizePayrollRun(payrollRunId: string): Promise<void> {
     where: { id: payrollRunId },
     data: { status: "FINALIZED", finalizedAt: new Date() },
   });
+  await recordAudit(session, "PAYROLL_FINALIZED", "PayrollRun", `Finalized payroll run ${run.month}/${run.year}`, payrollRunId);
 
   const org = await db.organization.findUniqueOrThrow({ where: { id: session.orgId } });
   if (org.payslipEmailEnabled) {
@@ -292,6 +294,7 @@ export async function revertPayrollRunToDraft(payrollRunId: string): Promise<Act
     where: { id: payrollRunId },
     data: { status: "DRAFT", finalizedAt: null },
   });
+  await recordAudit(session, "PAYROLL_REVERTED", "PayrollRun", `Reverted finalized payroll run ${run.month}/${run.year} to Draft`, payrollRunId);
 
   revalidatePath(`/payroll/${payrollRunId}`);
   revalidatePath("/payroll");
@@ -366,6 +369,7 @@ export async function deleteDraftPayrollRun(payrollRunId: string): Promise<void>
     db.payslipLine.deleteMany({ where: { payrollRunId } }),
     db.payrollRun.delete({ where: { id: payrollRunId } }),
   ]);
+  await recordAudit(session, "PAYROLL_DISCARDED", "PayrollRun", `Discarded draft payroll run ${run.month}/${run.year}`, payrollRunId);
 
   revalidatePath("/payroll");
   redirect("/payroll");

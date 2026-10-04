@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { recordAudit } from "@/lib/audit";
 import { assertSession } from "@/lib/permissions";
 import { normalizeLogoUrl } from "@/lib/logoUrl";
 
@@ -50,6 +51,8 @@ export async function updateOrganization(_prevState: ActionResult | null, formDa
       multiLocationEnabled,
     },
   });
+
+  await recordAudit(session, "SETTINGS_UPDATED", "Organization", "Updated company settings", session.orgId);
 
   revalidatePath("/settings");
   return { ok: true };

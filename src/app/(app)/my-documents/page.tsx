@@ -3,17 +3,20 @@ import { requireSession } from "@/lib/permissions";
 import { db } from "@/lib/db";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { acknowledgePolicy } from "@/actions/policyActions";
 
 const CATEGORY_LABELS: Record<string, string> = {
   TRAINING: "Training",
   CHECKLIST: "Checklist",
   DOCUMENT: "Document",
+  POLICY: "Policy",
 };
 
-const CATEGORY_TONES: Record<string, "info" | "warning" | "neutral"> = {
+const CATEGORY_TONES: Record<string, "info" | "warning" | "neutral" | "danger"> = {
   TRAINING: "info",
   CHECKLIST: "warning",
   DOCUMENT: "neutral",
+  POLICY: "danger",
 };
 
 export default async function MyDocumentsPage() {
@@ -23,6 +26,7 @@ export default async function MyDocumentsPage() {
   const documents = await db.companyDocument.findMany({
     where: { orgId: session.orgId, visibleTo: { some: { id: session.employeeId } } },
     orderBy: { createdAt: "desc" },
+    include: { acknowledgements: { where: { employeeId: session.employeeId }, select: { id: true } } },
   });
 
   return (
@@ -57,6 +61,16 @@ export default async function MyDocumentsPage() {
                     >
                       Open →
                     </a>
+                    {doc.category === "POLICY" &&
+                      (doc.acknowledgements.length > 0 ? (
+                        <span className="ml-3 text-xs font-semibold text-emerald-400">Acknowledged</span>
+                      ) : (
+                        <form action={acknowledgePolicy.bind(null, doc.id)} className="ml-3 inline">
+                          <button type="submit" className="text-xs font-semibold text-rose-400 hover:underline">
+                            I have read this
+                          </button>
+                        </form>
+                      ))}
                   </td>
                 </tr>
               ))}

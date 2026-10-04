@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { recordAudit } from "@/lib/audit";
 import { assertSession } from "@/lib/permissions";
 import { loanSchema } from "@/lib/validators";
 
@@ -36,6 +37,8 @@ export async function createLoan(_prevState: ActionResult | null, formData: Form
     },
   });
 
+  await recordAudit(session, "LOAN_CREATED", "Loan", `Created loan "${parsed.data.name}" for ${employee.name}: principal ${parsed.data.principalAmount}, EMI ${parsed.data.emiAmount}`, parsed.data.employeeId);
+
   revalidatePath("/loans");
   revalidatePath(`/employees/${parsed.data.employeeId}`);
   return { ok: true };
@@ -53,6 +56,7 @@ export async function cancelLoan(loanId: string): Promise<void> {
   if (!loan || loan.status !== "ACTIVE") return;
 
   await db.loan.update({ where: { id: loanId }, data: { status: "CANCELLED" } });
+  await recordAudit(session, "LOAN_CANCELLED", "Loan", `Cancelled loan "${loan.name}"`, loanId);
 
   revalidatePath("/loans");
   revalidatePath(`/employees/${loan.employeeId}`);

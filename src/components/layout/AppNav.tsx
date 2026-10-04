@@ -6,40 +6,72 @@ import { logout } from "@/actions/authActions";
 import { clsx } from "@/lib/clsx";
 import type { UserRole } from "@/generated/prisma/client";
 
-const LINKS: Record<UserRole, { href: string; label: string }[]> = {
-  SUPERADMIN: [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/employees", label: "Employees" },
-    { href: "/payroll", label: "Payroll" },
-    { href: "/attendance", label: "Attendance" },
-    { href: "/loans", label: "Loans" },
-    { href: "/reimbursements", label: "Claims" },
-    { href: "/leaves", label: "Leaves" },
-    { href: "/reports", label: "Reports" },
-    { href: "/approvals", label: "Approvals" },
-    { href: "/documents", label: "Documents" },
-    { href: "/team", label: "Team" },
-    { href: "/settings", label: "Settings" },
-  ],
-  HR_MANAGER: [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/employees", label: "Employees" },
-    { href: "/payroll", label: "Payroll" },
-    { href: "/attendance", label: "Attendance" },
-    { href: "/loans", label: "Loans" },
-    { href: "/reimbursements", label: "Claims" },
-    { href: "/leaves", label: "Leaves" },
-    { href: "/reports", label: "Reports" },
-    { href: "/documents", label: "Documents" },
-    { href: "/settings", label: "Settings" },
-  ],
-  EMPLOYEE: [
-    { href: "/my-payslips", label: "My Payslips" },
-    { href: "/my-loans", label: "My Loans" },
-    { href: "/my-reimbursements", label: "My Claims" },
-    { href: "/my-leaves", label: "My Leaves" },
-    { href: "/my-documents", label: "My Documents" },
-  ],
+interface NavLink {
+  href: string;
+  label: string;
+}
+
+// primary links sit in the bar; more links collapse into a "More" menu on
+// desktop (the mobile strip just scrolls through everything).
+const LINKS: Record<UserRole, { primary: NavLink[]; more: NavLink[] }> = {
+  SUPERADMIN: {
+    primary: [
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/employees", label: "Employees" },
+      { href: "/payroll", label: "Payroll" },
+      { href: "/attendance", label: "Attendance" },
+      { href: "/reports", label: "Reports" },
+      { href: "/approvals", label: "Approvals" },
+      { href: "/settings", label: "Settings" },
+    ],
+    more: [
+      { href: "/loans", label: "Loans" },
+      { href: "/reimbursements", label: "Claims" },
+      { href: "/leaves", label: "Leaves" },
+      { href: "/regularizations", label: "Attendance fixes" },
+      { href: "/holidays", label: "Holidays" },
+      { href: "/documents", label: "Documents & policies" },
+      { href: "/assets", label: "Assets" },
+      { href: "/offboarding", label: "Offboarding" },
+      { href: "/helpdesk", label: "Helpdesk" },
+      { href: "/team", label: "Team" },
+      { href: "/audit-log", label: "Audit log" },
+    ],
+  },
+  HR_MANAGER: {
+    primary: [
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/employees", label: "Employees" },
+      { href: "/payroll", label: "Payroll" },
+      { href: "/attendance", label: "Attendance" },
+      { href: "/reports", label: "Reports" },
+      { href: "/settings", label: "Settings" },
+    ],
+    more: [
+      { href: "/loans", label: "Loans" },
+      { href: "/reimbursements", label: "Claims" },
+      { href: "/leaves", label: "Leaves" },
+      { href: "/regularizations", label: "Attendance fixes" },
+      { href: "/holidays", label: "Holidays" },
+      { href: "/documents", label: "Documents & policies" },
+      { href: "/assets", label: "Assets" },
+      { href: "/offboarding", label: "Offboarding" },
+      { href: "/helpdesk", label: "Helpdesk" },
+    ],
+  },
+  EMPLOYEE: {
+    primary: [
+      { href: "/my-payslips", label: "My Payslips" },
+      { href: "/my-leaves", label: "My Leaves" },
+      { href: "/my-attendance", label: "My Attendance" },
+      { href: "/my-documents", label: "My Documents" },
+    ],
+    more: [
+      { href: "/my-loans", label: "My Loans" },
+      { href: "/my-reimbursements", label: "My Claims" },
+      { href: "/my-helpdesk", label: "Helpdesk" },
+    ],
+  },
 };
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -67,7 +99,9 @@ export function AppNav({
   role: UserRole;
 }) {
   const pathname = usePathname();
-  const links = LINKS[role];
+  const { primary, more } = LINKS[role];
+  const allLinks = [...primary, ...more];
+  const moreActive = more.some((l) => pathname.startsWith(l.href));
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-ink-950/70 backdrop-blur-xl">
@@ -91,7 +125,7 @@ export function AppNav({
             </div>
           </div>
           <nav className="hidden items-center gap-4 md:flex">
-            {links.map((link) => (
+            {primary.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -105,6 +139,30 @@ export function AppNav({
                 {link.label}
               </Link>
             ))}
+            <details className="group relative">
+              <summary
+                className={clsx(
+                  "cursor-pointer list-none text-sm font-medium transition-colors",
+                  moreActive ? "text-amber-400" : "text-slate-400 hover:text-white",
+                )}
+              >
+                More ▾
+              </summary>
+              <div className="absolute right-0 top-8 z-40 w-52 rounded-xl border border-slate-800 bg-ink-950 p-2 shadow-xl">
+                {more.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={clsx(
+                      "block rounded-lg px-3 py-2 text-sm transition-colors hover:bg-slate-800",
+                      pathname.startsWith(link.href) ? "text-amber-400" : "text-slate-300",
+                    )}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            </details>
           </nav>
         </div>
         <div className="flex items-center gap-3">
@@ -128,7 +186,7 @@ export function AppNav({
         </div>
       </div>
       <nav className="flex items-center gap-4 overflow-x-auto border-t border-slate-800/60 px-4 py-2 md:hidden">
-        {links.map((link) => (
+        {allLinks.map((link) => (
           <Link
             key={link.href}
             href={link.href}

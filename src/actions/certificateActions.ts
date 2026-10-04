@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { recordAudit } from "@/lib/audit";
 import { assertSession } from "@/lib/permissions";
 import { addCertificateSchema } from "@/lib/validators";
 
@@ -50,6 +51,8 @@ export async function addCertificate(_prevState: ActionResult | null, formData: 
     },
   });
 
+  await recordAudit(session, "CERTIFICATE_ADDED", "Certificate", `Added certificate "${parsed.data.name}"${fileName ? " with a photo" : ""}`);
+
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   return { ok: true };
@@ -59,6 +62,7 @@ export async function deleteCertificate(certificateId: string): Promise<void> {
   const session = await assertSession(["SUPERADMIN", "HR_MANAGER"]);
 
   await db.certificate.deleteMany({ where: { id: certificateId, orgId: session.orgId } });
+  await recordAudit(session, "CERTIFICATE_DELETED", "Certificate", "Deleted a certificate", certificateId);
 
   revalidatePath("/settings");
   revalidatePath("/dashboard");

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { recordAudit } from "@/lib/audit";
 import { assertSession } from "@/lib/permissions";
 import {
   employeeSchema,
@@ -91,7 +92,7 @@ export async function createEmployee(_prevState: ActionResult | null, formData: 
   const { basic, hra, da, conveyance, medicalAllowance, specialAllowance, otherAllowances, ...employeeData } =
     parsed.data;
 
-  await db.employee.create({
+  const createdEmployee = await db.employee.create({
     data: {
       orgId: session.orgId,
       ...employeeData,
@@ -110,6 +111,8 @@ export async function createEmployee(_prevState: ActionResult | null, formData: 
     },
   });
 
+  await recordAudit(session, "EMPLOYEE_CREATED", "Employee", `Added employee ${createdEmployee.name} (${createdEmployee.employeeCode})`, createdEmployee.id);
+
   revalidatePath("/employees");
   return { ok: true };
 }
@@ -121,6 +124,7 @@ export async function toggleEmployeeStatus(employeeId: string, active: boolean):
     where: { id: employeeId, orgId: session.orgId },
     data: { status: active ? "ACTIVE" : "INACTIVE" },
   });
+  await recordAudit(session, active ? "EMPLOYEE_ACTIVATED" : "EMPLOYEE_DEACTIVATED", "Employee", `${active ? "Activated" : "Deactivated"} employee`, employeeId);
 
   revalidatePath("/employees");
 }
@@ -140,6 +144,7 @@ export async function toggleEmployeeStatutory(
     where: { id: employeeId, orgId: session.orgId },
     data: { [field]: value },
   });
+  await recordAudit(session, "STATUTORY_TOGGLED", "Employee", `Set ${field === "pfApplicable" ? "PF" : "ESI"} applicability to ${value ? "On" : "Off"}`, employeeId);
 
   revalidatePath("/dashboard");
   revalidatePath(`/employees/${employeeId}`);
@@ -196,6 +201,7 @@ export async function updateSalaryStructure(
       otherAllowances: otherAllowances as unknown as Prisma.InputJsonValue,
     },
   });
+  await recordAudit(session, "SALARY_REVISED", "Employee", `Saved a salary revision effective ${effectiveFrom.toLocaleDateString("en-IN")} (basic ${salary.basic})`, employeeId);
 
   revalidatePath(`/employees/${employeeId}`);
   return { ok: true };
@@ -241,6 +247,7 @@ export async function editSalaryStructure(
     where: { id: structureId },
     data: { ...salary, otherAllowances: otherAllowances as unknown as Prisma.InputJsonValue },
   });
+  await recordAudit(session, "SALARY_EDITED_IN_PLACE", "Employee", `Edited the current salary structure in place (basic ${salary.basic})`, structure.employeeId);
 
   revalidatePath(`/employees/${structure.employeeId}`);
   return { ok: true };

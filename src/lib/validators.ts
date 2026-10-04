@@ -36,7 +36,7 @@ export const EMPLOYMENT_BASES = ["PERMANENT", "CONTRACT"] as const;
 export const EMPLOYEE_CATEGORIES = ["NON_MANAGERIAL", "MANAGERIAL"] as const;
 export const PAY_MODES = ["MONTHLY", "HOURLY_ATTENDANCE", "WAGE_BASED"] as const;
 export const WAGE_RATE_TYPES = ["HOURLY", "DAILY"] as const;
-export const DOCUMENT_CATEGORIES = ["TRAINING", "CHECKLIST", "DOCUMENT"] as const;
+export const DOCUMENT_CATEGORIES = ["TRAINING", "CHECKLIST", "DOCUMENT", "POLICY"] as const;
 
 export const CERTIFICATE_CATEGORIES = [
   "PF_REGISTRATION",
@@ -316,5 +316,45 @@ export const resetPasswordSchema = z
     confirmPassword: z.string().min(1, "Confirm your new password."),
   })
   .refine((v) => v.password === v.confirmPassword, { message: "Passwords don't match.", path: ["confirmPassword"] });
+
+export const holidaySchema = z.object({
+  date: z.coerce.date({ error: "Enter a valid date." }),
+  name: z.string().min(1, "Holiday name is required."),
+});
+
+export const regularizationSchema = z.object({
+  date: z.coerce.date({ error: "Enter a valid date." }),
+  status: z.enum(["PRESENT", "ABSENT"]),
+  reason: optionalString,
+});
+
+export const regularizationReviewSchema = z.object({
+  decision: z.enum(["APPROVED", "REJECTED"]),
+  reviewNote: optionalString,
+});
+
+export const assetSchema = z.object({
+  name: z.string().min(1, "Asset name is required."),
+  serialNo: optionalString,
+});
+
+export const helpdeskTicketSchema = z.object({
+  subject: z.string().min(3, "Add a short subject."),
+  message: z.string().min(5, "Describe your question or issue."),
+});
+
+export const ticketResponseSchema = z.object({
+  response: z.string().min(1, "Write a response."),
+});
+
+export const DEFAULT_OFFBOARDING_ITEMS = [
+  "Notice period and last working day confirmed",
+  "Work handed over",
+  "Company assets returned",
+  "Final settlement calculated",
+  "Exit interview done",
+  "Relieving letter issued",
+  "System access removed",
+] as const;
 
 export { optionalString, optionalNumber, booleanFromCheckbox };

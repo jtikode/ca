@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { recordAudit } from "@/lib/audit";
 import { assertSession } from "@/lib/permissions";
 import type { OtherAllowanceItem } from "@/lib/statutory";
 import type { Prisma } from "@/generated/prisma/client";
@@ -105,6 +106,8 @@ export async function approveRequest(requestId: string): Promise<ActionResult> {
     });
   });
 
+  await recordAudit(session, "APPROVAL_APPROVED", "ApprovalRequest", `Approved a ${request.type === "CREATE_EMPLOYEE" ? "new employee" : "salary change"} request`, requestId);
+
   revalidatePath("/approvals");
   revalidatePath("/employees");
   return { ok: true };
@@ -124,6 +127,7 @@ export async function rejectRequest(requestId: string, reviewNote?: string): Pro
     where: { id: requestId },
     data: { status: "REJECTED", reviewedById: session.userId, reviewedAt: new Date(), reviewNote },
   });
+  await recordAudit(session, "APPROVAL_REJECTED", "ApprovalRequest", `Rejected a ${request.type === "CREATE_EMPLOYEE" ? "new employee" : "salary change"} request`, requestId);
 
   revalidatePath("/approvals");
   return { ok: true };

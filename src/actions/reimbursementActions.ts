@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { recordAudit } from "@/lib/audit";
 import { assertSession } from "@/lib/permissions";
 import { reimbursementClaimSchema, reimbursementReviewSchema } from "@/lib/validators";
 import { recomputeOneEmployeeLine } from "@/actions/payrollActions";
@@ -64,6 +65,8 @@ export async function reviewReimbursementClaim(
       reviewedAt: new Date(),
     },
   });
+
+  await recordAudit(session, `REIMBURSEMENT_${parsed.data.decision}`, "ReimbursementClaim", `${parsed.data.decision === "APPROVED" ? "Approved" : "Rejected"} a reimbursement claim of ${claim.amount}`, claimId);
 
   revalidatePath("/reimbursements");
   revalidatePath("/my-reimbursements");

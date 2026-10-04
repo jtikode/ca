@@ -72,6 +72,18 @@ enum DocumentCategory {
   TRAINING
   CHECKLIST
   DOCUMENT
+  POLICY
+}
+
+enum RegularizationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TicketStatus {
+  OPEN
+  RESOLVED
 }
 
 enum LoanStatus {
@@ -168,6 +180,10 @@ model Organization {
   loans                  Loan[]
   reimbursementClaims    ReimbursementClaim[]
   leaveRequests          LeaveRequest[]
+  auditLogs              AuditLog[]
+  holidays               Holiday[]
+  assets                 Asset[]
+  helpdeskTickets        HelpdeskTicket[]
   createdByPlatformAdmin PlatformAdmin?       @relation(fields: [createdByPlatformAdminId], references: [id])
 
   @@index([state])
@@ -302,18 +318,23 @@ model Employee {
   storeId                   String?
   createdAt                 DateTime         @default(now())
 
-  organization        Organization         @relation(fields: [orgId], references: [id])
-  salaryStructures    SalaryStructure[]
-  taxDeclarations     TaxDeclaration[]
-  payslipLines        PayslipLine[]
-  payrollAdjustments  PayrollAdjustment[]
-  attendances         Attendance[]
-  loginUser           User?
-  visibleDocuments    CompanyDocument[]
-  store               Store?               @relation(fields: [storeId], references: [id])
-  loans               Loan[]
-  reimbursementClaims ReimbursementClaim[]
-  leaveRequests       LeaveRequest[]
+  organization           Organization               @relation(fields: [orgId], references: [id])
+  salaryStructures       SalaryStructure[]
+  taxDeclarations        TaxDeclaration[]
+  payslipLines           PayslipLine[]
+  payrollAdjustments     PayrollAdjustment[]
+  attendances            Attendance[]
+  loginUser              User?
+  visibleDocuments       CompanyDocument[]
+  store                  Store?                     @relation(fields: [storeId], references: [id])
+  loans                  Loan[]
+  reimbursementClaims    ReimbursementClaim[]
+  leaveRequests          LeaveRequest[]
+  regularizations        AttendanceRegularization[]
+  policyAcknowledgements PolicyAcknowledgement[]
+  offboardingItems       OffboardingItem[]
+  assets                 Asset[]
+  helpdeskTickets        HelpdeskTicket[]
 
   @@unique([orgId, employeeCode])
   @@index([orgId])
@@ -649,8 +670,9 @@ model CompanyDocument {
   url       String
   createdAt DateTime         @default(now())
 
-  organization Organization @relation(fields: [orgId], references: [id])
-  visibleTo    Employee[]
+  organization     Organization            @relation(fields: [orgId], references: [id])
+  visibleTo        Employee[]
+  acknowledgements PolicyAcknowledgement[]
 
   @@index([orgId])
 }
@@ -727,4 +749,123 @@ model ApprovalRequest {
   reviewedBy   User?        @relation("ReviewedApprovals", fields: [reviewedById], references: [id])
 
   @@index([orgId, status])
+}
+
+// Append-only record of sensitive changes (who did what, when), shown to
+// SUPERADMIN only at /audit-log. actorName is copied in at write time so the
+// log stays readable even if the user is later removed. See src/lib/audit.ts.
+model AuditLog {
+  id          String   @id @default(cuid())
+  orgId       String
+  actorUserId String
+  actorName   String
+  action      String
+  entityType  String
+  entityId    String?
+  summary     String
+  createdAt   DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, createdAt])
+}
+
+// Company holiday calendar, display and planning only: it is not wired into
+// payroll days-paid, which still comes from the run's own days-paid figure.
+model Holiday {
+  id    String   @id @default(cuid())
+  orgId String
+  date  DateTime
+  name  String
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, date])
+  @@index([orgId])
+}
+
+// An employee's request to correct a missed or wrong attendance day.
+// Approving upserts the matching Attendance row (present or absent).
+model AttendanceRegularization {
+  id           String               @id @default(cuid())
+  orgId        String
+  employeeId   String
+  date         DateTime
+  markPresent  Boolean
+  reason       String?
+  status       RegularizationStatus @default(PENDING)
+  reviewNote   String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime             @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([orgId, status])
+  @@index([employeeId])
+}
+
+// One row per employee per POLICY-category CompanyDocument they confirmed
+// reading.
+model PolicyAcknowledgement {
+  id             String   @id @default(cuid())
+  documentId     String
+  employeeId     String
+  acknowledgedAt DateTime @default(now())
+
+  document CompanyDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  employee Employee        @relation(fields: [employeeId], references: [id])
+
+  @@unique([documentId, employeeId])
+}
+
+// Exit checklist items for an employee who is leaving; created from a
+// default template when HR starts offboarding.
+model OffboardingItem {
+  id         String    @id @default(cuid())
+  orgId      String
+  employeeId String
+  title      String
+  done       Boolean   @default(false)
+  doneAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([orgId, employeeId])
+}
+
+// A company asset (laptop, phone, ID card...). assignedToId null = in stock.
+model Asset {
+  id           String    @id @default(cuid())
+  orgId        String
+  name         String
+  serialNo     String?
+  assignedToId String?
+  assignedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  assignedTo   Employee?    @relation(fields: [assignedToId], references: [id])
+
+  @@index([orgId])
+  @@index([assignedToId])
+}
+
+model HelpdeskTicket {
+  id          String       @id @default(cuid())
+  orgId       String
+  employeeId  String
+  subject     String
+  message     String
+  status      TicketStatus @default(OPEN)
+  response    String?
+  respondedAt DateTime?
+  createdAt   DateTime     @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+
+  @@index([orgId, status])
+  @@index([employeeId])
 }

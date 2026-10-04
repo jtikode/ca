@@ -9,12 +9,14 @@ const CATEGORY_LABELS: Record<string, string> = {
   TRAINING: "Training",
   CHECKLIST: "Checklist",
   DOCUMENT: "Document",
+  POLICY: "Policy",
 };
 
-const CATEGORY_TONES: Record<string, "info" | "warning" | "neutral"> = {
+const CATEGORY_TONES: Record<string, "info" | "warning" | "neutral" | "danger"> = {
   TRAINING: "info",
   CHECKLIST: "warning",
   DOCUMENT: "neutral",
+  POLICY: "danger",
 };
 
 export default async function DocumentsPage() {
@@ -29,7 +31,7 @@ export default async function DocumentsPage() {
     db.companyDocument.findMany({
       where: { orgId: session.orgId },
       orderBy: { createdAt: "desc" },
-      include: { _count: { select: { visibleTo: true } } },
+      include: { _count: { select: { visibleTo: true, acknowledgements: true } } },
     }),
   ]);
 
@@ -67,6 +69,11 @@ export default async function DocumentsPage() {
                 </td>
                 <td className="py-2 pr-4 text-slate-400">
                   {doc._count.visibleTo} employee{doc._count.visibleTo === 1 ? "" : "s"}
+                  {doc.category === "POLICY" && (
+                    <span className="block text-xs text-amber-400">
+                      {doc._count.acknowledgements} acknowledged
+                    </span>
+                  )}
                 </td>
                 <td className="py-2 pr-4">
                   <a
