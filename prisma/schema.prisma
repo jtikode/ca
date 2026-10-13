@@ -109,6 +109,9 @@ enum LeaveType {
   CASUAL
   SICK
   EARNED
+  // Loss of pay: approved UNPAID days reduce days paid when a payroll run is
+  // created, see src/lib/leaveImpact.ts.
+  UNPAID
 }
 
 enum LeaveRequestStatus {
@@ -152,6 +155,10 @@ model Organization {
   // the manual /api/cron/compliance-digest trigger) knows which orgs are
   // due — not a schedule itself, just "don't re-send before 7 days pass".
   lastComplianceDigestSentAt   DateTime?
+  // Set only for orgs created through self service /signup: the end of the
+  // 7 day free pilot. Null for every other org (no pilot banner). The app
+  // shows a banner but does not lock the account, there is no billing yet.
+  trialEndsAt                  DateTime?
   // Link to a publicly-viewable image (e.g. a Google Drive "anyone with the
   // link" share, auto-rewritten to a direct-view URL by
   // src/lib/logoUrl.ts) — not an uploaded file, see that module's comment.
@@ -181,10 +188,13 @@ model Organization {
   reimbursementClaims    ReimbursementClaim[]
   leaveRequests          LeaveRequest[]
   auditLogs              AuditLog[]
+  memberships            OrgMembership[]
+  finalSettlements       FinalSettlement[]
+  profileChangeRequests  ProfileChangeRequest[]
   holidays               Holiday[]
   assets                 Asset[]
   helpdeskTickets        HelpdeskTicket[]
-  createdByPlatformAdmin PlatformAdmin?       @relation(fields: [createdByPlatformAdminId], references: [id])
+  createdByPlatformAdmin PlatformAdmin?         @relation(fields: [createdByPlatformAdminId], references: [id])
 
   @@index([state])
 }
@@ -242,6 +252,7 @@ model User {
   requestedApprovals  ApprovalRequest[]    @relation("RequestedApprovals")
   reviewedApprovals   ApprovalRequest[]    @relation("ReviewedApprovals")
   passwordResetTokens PasswordResetToken[]
+  memberships         OrgMembership[]
 
   @@index([orgId])
 }
@@ -331,6 +342,8 @@ model Employee {
   reimbursementClaims    ReimbursementClaim[]
   leaveRequests          LeaveRequest[]
   regularizations        AttendanceRegularization[]
+  finalSettlements       FinalSettlement[]
+  profileChanges         ProfileChangeRequest[]
   policyAcknowledgements PolicyAcknowledgement[]
   offboardingItems       OffboardingItem[]
   assets                 Asset[]
@@ -862,6 +875,63 @@ model HelpdeskTicket {
   response    String?
   respondedAt DateTime?
   createdAt   DateTime     @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+
+  @@index([orgId, status])
+  @@index([employeeId])
+}
+
+// Lets one login (a CA, say) work inside several client companies. The
+// user's own org (User.orgId) is always accessible; each row here grants
+// access to one more org with the given role. Switching writes the chosen
+// orgId/role into the session, so every orgId scoped query works unchanged.
+model OrgMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  orgId     String
+  role      UserRole @default(SUPERADMIN)
+  createdAt DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+}
+
+// A recorded full and final settlement for an employee who is leaving.
+// breakdown holds the itemized lines (JSON) so the statement can be shown
+// again exactly as computed on the day.
+model FinalSettlement {
+  id             String   @id @default(cuid())
+  orgId          String
+  employeeId     String
+  lastWorkingDay DateTime
+  breakdown      Json
+  netPayable     Decimal
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+
+  @@index([orgId])
+  @@index([employeeId])
+}
+
+// An employee's request to change their own profile details (bank, PAN,
+// UAN, email, ...). changes is { field: newValue }; approving applies it.
+model ProfileChangeRequest {
+  id           String         @id @default(cuid())
+  orgId        String
+  employeeId   String
+  changes      Json
+  status       ApprovalStatus @default(PENDING)
+  reviewNote   String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime       @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id])
   employee     Employee     @relation(fields: [employeeId], references: [id])

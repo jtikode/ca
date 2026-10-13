@@ -34,7 +34,12 @@ export async function signup(_prevState: ActionResult | null, formData: FormData
 
   const { user } = await db.$transaction(async (tx) => {
     const organization = await tx.organization.create({
-      data: { name: parsed.data.orgName, state: parsed.data.state },
+      // 7 day free pilot: shown as a banner in the app, not a lock (no billing yet).
+      data: {
+        name: parsed.data.orgName,
+        state: parsed.data.state,
+        trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
     });
 
     const user = await tx.user.create({

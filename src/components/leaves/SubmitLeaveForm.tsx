@@ -14,6 +14,7 @@ const TYPE_LABELS: Record<(typeof LEAVE_TYPES)[number], string> = {
   CASUAL: "Casual",
   SICK: "Sick",
   EARNED: "Earned",
+  UNPAID: "Unpaid (loss of pay)",
 };
 
 export function SubmitLeaveForm() {

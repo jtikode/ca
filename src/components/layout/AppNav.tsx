@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/actions/authActions";
 import { clsx } from "@/lib/clsx";
+import { OrgSwitcher } from "@/components/layout/OrgSwitcher";
 import type { UserRole } from "@/generated/prisma/client";
 
 interface NavLink {
@@ -34,6 +35,10 @@ const LINKS: Record<UserRole, { primary: NavLink[]; more: NavLink[] }> = {
       { href: "/assets", label: "Assets" },
       { href: "/offboarding", label: "Offboarding" },
       { href: "/helpdesk", label: "Helpdesk" },
+      { href: "/earnings", label: "Bonus & arrears" },
+      { href: "/settlements", label: "Final settlement" },
+      { href: "/profile-changes", label: "Profile changes" },
+      { href: "/clients", label: "Clients" },
       { href: "/team", label: "Team" },
       { href: "/audit-log", label: "Audit log" },
     ],
@@ -57,6 +62,10 @@ const LINKS: Record<UserRole, { primary: NavLink[]; more: NavLink[] }> = {
       { href: "/assets", label: "Assets" },
       { href: "/offboarding", label: "Offboarding" },
       { href: "/helpdesk", label: "Helpdesk" },
+      { href: "/earnings", label: "Bonus & arrears" },
+      { href: "/settlements", label: "Final settlement" },
+      { href: "/profile-changes", label: "Profile changes" },
+      { href: "/clients", label: "Clients" },
     ],
   },
   EMPLOYEE: {
@@ -69,6 +78,7 @@ const LINKS: Record<UserRole, { primary: NavLink[]; more: NavLink[] }> = {
     more: [
       { href: "/my-loans", label: "My Loans" },
       { href: "/my-reimbursements", label: "My Claims" },
+      { href: "/my-profile", label: "My Profile" },
       { href: "/my-helpdesk", label: "Helpdesk" },
     ],
   },
@@ -92,11 +102,15 @@ export function AppNav({
   orgLogoUrl,
   userName,
   role,
+  orgs,
+  currentOrgId,
 }: {
   orgName: string;
   orgLogoUrl?: string | null;
   userName: string;
   role: UserRole;
+  orgs?: { id: string; name: string }[];
+  currentOrgId?: string;
 }) {
   const pathname = usePathname();
   const { primary, more } = LINKS[role];
@@ -166,6 +180,7 @@ export function AppNav({
           </nav>
         </div>
         <div className="flex items-center gap-3">
+          {orgs && currentOrgId && <OrgSwitcher orgs={orgs} currentOrgId={currentOrgId} />}
           <div className="flex items-center gap-2.5 rounded-full border border-slate-800 bg-slate-900/60 py-1 pl-1 pr-3">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-slate-700 to-slate-800 text-xs font-semibold text-amber-300 ring-1 ring-slate-700">
               {initials(userName)}

@@ -289,7 +289,7 @@ export const reimbursementReviewSchema = z.object({
   reviewNote: optionalString,
 });
 
-export const LEAVE_TYPES = ["CASUAL", "SICK", "EARNED"] as const;
+export const LEAVE_TYPES = ["CASUAL", "SICK", "EARNED", "UNPAID"] as const;
 
 export const leaveRequestSchema = z
   .object({

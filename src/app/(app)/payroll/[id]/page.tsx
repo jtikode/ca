@@ -11,6 +11,7 @@ import { RevertRunButton } from "@/components/payroll/RevertRunButton";
 import { PayrollAdjustmentForm } from "@/components/payroll/PayrollAdjustmentForm";
 import { finalizePayrollRun, deleteDraftPayrollRun, recomputePayrollRun } from "@/actions/payrollActions";
 import { MONTH_NAMES } from "@/lib/dates";
+import { splitBankLines } from "@/lib/exports/bankFile";
 
 function inr(n: number) {
   return `₹${n.toLocaleString("en-IN")}`;
@@ -41,6 +42,16 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
   for (const a of run.payrollAdjustments) {
     adjustmentsByEmployee.set(a.employeeId, [...(adjustmentsByEmployee.get(a.employeeId) ?? []), a]);
   }
+
+  const bankSplit = splitBankLines(
+    run.payslipLines.map((l) => ({
+      employeeCode: l.employee.employeeCode,
+      name: l.employee.name,
+      bankAccountNo: l.employee.bankAccountNo,
+      bankIfsc: l.employee.bankIfsc,
+      netPay: Number(l.netPay),
+    })),
+  );
 
   const totals = run.payslipLines.reduce(
     (acc, line) => ({
@@ -90,10 +101,29 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
             >
               Export for CA
             </Link>
+            <a
+              href={`/api/payroll/${run.id}/bank-file`}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 px-4 text-sm font-semibold text-white transition hover:bg-slate-700"
+            >
+              Bank transfer file
+            </a>
+            <a
+              href={`/api/payroll/${run.id}/tally`}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 px-4 text-sm font-semibold text-white transition hover:bg-slate-700"
+            >
+              Tally XML
+            </a>
             {run.finalizedAt && <RevertRunButton payrollRunId={run.id} finalizedAt={run.finalizedAt} />}
           </div>
         )}
       </div>
+      {!isDraft && bankSplit.missingDetails.length > 0 && (
+        <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-400">
+          {bankSplit.missingDetails.length} employee{bankSplit.missingDetails.length === 1 ? " is" : "s are"} left out of
+          the bank file for missing bank account or IFSC:{" "}
+          {bankSplit.missingDetails.map((l) => l.name).join(", ")}.
+        </p>
+      )}
       {isDraft && (
         <p className="text-sm text-amber-400/80">
           This run is still a Draft — figures here can change until you finalize it.

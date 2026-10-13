@@ -9,6 +9,7 @@ import { payrollRunInputSchema, payrollAdjustmentSchema } from "@/lib/validators
 import { computePayslipLine, type AdjustmentInput } from "@/lib/payrollEngine";
 import { sendPayslipEmailInternal } from "@/actions/payslipEmailActions";
 import { daysInMonth } from "@/lib/dates";
+import { unpaidLeaveDaysByEmployee } from "@/lib/leaveImpact";
 
 async function getAdjustments(payrollRunId: string, employeeId: string): Promise<AdjustmentInput[]> {
   const rows = await db.payrollAdjustment.findMany({ where: { payrollRunId, employeeId } });
@@ -182,16 +183,25 @@ async function recomputeRun(payrollRunId: string, orgId: string, daysPaidOverrid
   // silently reset an employee back to a full month.
   const existingLines = await db.payslipLine.findMany({ where: { payrollRunId } });
   const existingDaysPaid = new Map(existingLines.map((l) => [l.employeeId, Number(l.daysPaid)]));
+  const lopDays = await unpaidLeaveDaysByEmployee(orgId, run.month, run.year);
+  const totalDays = daysInMonth(run.month, run.year);
 
   for (const employee of employees) {
     const adjustments = await getAdjustments(payrollRunId, employee.id);
     // Only apply a days-paid figure for standard MONTHLY employees —
     // HOURLY_ATTENDANCE/WAGE_BASED pay should keep computing from this
     // month's own attendance, not a stored/copied day count.
-    const daysPaidOverride =
-      employee.payMode === "MONTHLY"
-        ? (daysPaidOverrides?.get(employee.id) ?? existingDaysPaid.get(employee.id))
-        : undefined;
+    // A manually set partial month is always kept. Otherwise approved unpaid
+    // leave takes the days off, and failing that a copied figure or the
+    // existing full month applies.
+    let daysPaidOverride: number | undefined;
+    if (employee.payMode === "MONTHLY") {
+      const existing = existingDaysPaid.get(employee.id);
+      const lop = lopDays.get(employee.id) ?? 0;
+      if (existing !== undefined && existing < totalDays) daysPaidOverride = existing;
+      else if (lop > 0) daysPaidOverride = Math.max(0, totalDays - lop);
+      else daysPaidOverride = daysPaidOverrides?.get(employee.id) ?? existing;
+    }
     const line = await computePayslipLine(orgId, employee.id, run.month, run.year, daysPaidOverride, adjustments);
     if (!line) continue;
 

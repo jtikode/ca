@@ -32,7 +32,7 @@ export default async function MyLeavesPage() {
   // simplest possible balance given LeavePolicy's own entitlement is an
   // annual (not FY-precise) approximation too, see its schema comment.
   const currentYear = new Date().getFullYear();
-  const takenByType: Record<LeaveType, number> = { CASUAL: 0, SICK: 0, EARNED: 0 };
+  const takenByType: Record<LeaveType, number> = { CASUAL: 0, SICK: 0, EARNED: 0, UNPAID: 0 };
   for (const r of requests) {
     if (r.status === "APPROVED" && r.fromDate.getFullYear() === currentYear) {
       takenByType[r.type] += Number(r.days);

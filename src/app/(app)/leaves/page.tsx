@@ -35,7 +35,9 @@ export default async function LeavesPage() {
       <Card className="overflow-x-auto">
         <h2 className="mb-1 text-lg font-bold text-white">Pending review</h2>
         <p className="mb-4 text-sm text-slate-400">
-          A decision here is a record only — it doesn&apos;t touch attendance or payroll.
+          Casual, sick and earned leave are records only. Approved <b>unpaid</b> leave reduces days paid when a payroll
+          run is created (company holidays inside the leave are not counted); for a run that is already a Draft, set days
+          paid on the run if needed.
         </p>
         {pending.length === 0 ? (
           <p className="text-sm text-slate-500">Nothing pending.</p>

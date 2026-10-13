@@ -10,7 +10,8 @@ export default function SignupPage() {
           Tim<span className="text-amber-400">Hr</span>
         </h1>
         <Card>
-          <h2 className="mb-4 text-lg font-bold text-white">Create your company account</h2>
+          <h2 className="mb-1 text-lg font-bold text-white">Create your company account</h2>
+          <p className="mb-4 text-sm text-slate-400">Start your 7 day free pilot. No card needed.</p>
           <SignupForm />
         </Card>
         <p className="text-center text-sm text-slate-400">
